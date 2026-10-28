@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Istilo POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  </head>
+  <body>
+    <div class="top-layout">
+      <aside class="menu-panel">
+        <div class="brand-wrap">
+          <div class="brand-icon">☕</div>
+          <div class="brand-text">
+            <h1>ISTILO POS</h1>
+            <p>Counter ordering system</p>
+          </div>
+        </div>
+
+        <nav class="main-nav">
+          <a class="nav-item active" href="#">Home</a>
+        </nav>
+
+        <div class="menu-content">
+          <div class="section-title-wrap">
+            <h2>Our Menu</h2>
+            <small>Select a category to view our products</small>
+          </div>
+
+          <div id="categoryGrid" class="category-grid"></div>
+        </div>
+      </aside>
+
+      <aside class="order-panel">
+        <div class="order-summary">
+          <div class="order-head">
+            <h3>Current Order</h3>
+            <span>Order #001</span>
+          </div>
+
+          <div class="field-group">
+            <label>Customer Name</label>
+            <input type="text" value="Walk-in customer" />
+          </div>
+
+          <div class="cart-list" id="cartList"></div>
+
+          <div class="totals-box">
+            <div class="line-row">
+              <span>Subtotal</span>
+              <strong id="subtotalValue">P0.00</strong>
+            </div>
+            <div class="line-row">
+              <span>Total</span>
+              <strong id="totalValue">P0.00</strong>
+            </div>
+            <div class="field-group inline">
+              <label>Payment method</label>
+              <select>
+                <option>Cash</option>
+                <option>GCash</option>
+                <option>Card</option>
+              </select>
+            </div>
+            <div class="field-group inline">
+              <label>Cash received</label>
+              <input type="number" value="0" />
+            </div>
+            <div class="field-group inline">
+              <label>Change</label>
+              <input type="text" value="P0.00" />
+            </div>
+          </div>
+
+          <div class="action-row">
+            <button class="secondary-btn">Complete Order</button>
+            <button class="ghost-btn">Clear Order</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <main class="flow-page">
+      <section class="flow-section">
+        <h2>ORDER PAGE</h2>
+        <p>Displays the six menu categories</p>
+        <div class="arrow-down">↓</div>
+        <div id="categoryBoxes" class="category-boxes"></div>
+      </section>
+
+      <section class="flow-section">
+        <h2>PRODUCT LIST</h2>
+        <p>Example: Iced Americano, Spanish Latte, Cappuccino</p>
+        <div class="arrow-down">↓</div>
+        <div id="productList" class="product-list"></div>
+      </section>
+
+      <section class="flow-section detail-box">
+        <h2>PRODUCT DETAILS</h2>
+        <p>Product name, description, price, available flavors, size and quantity</p>
+        <button class="detail-add-btn">Add to Order</button>
+      </section>
+
+      <div class="arrow-down">↓</div>
+
+      <section class="flow-section cart-box">
+        <div class="dots">•••</div>
+        <h2>CURRENT ORDER / CART</h2>
+      </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+  </body>
+</html>
