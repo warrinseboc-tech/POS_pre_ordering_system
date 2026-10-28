@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drinks — Istilo Coffee Shop</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="main-app">
+        <div class="customer-view">
+            <div class="cust-layout">
+                <aside class="cust-sidebar">
+                    <div class="cust-logo">
+                        <img src="istilo logo.png" alt="Istilo Logo" class="cust-logo-img">
+                        <h1>Istilo</h1>
+                        <button class="cust-menu-btn" onclick="toggleCustSidebar()"><i class="fas fa-bars"></i></button>
+                    </div>
+                    <nav class="cust-nav">
+                        <a href="index.html" class="cust-nav-link"><i class="fas fa-home"></i> HOME</a>
+                        <a href="cust-drinks.html" class="cust-nav-link active"><i class="fas fa-mug-hot"></i> DRINKS</a>
+                        <a href="cust-snacks.html" class="cust-nav-link"><i class="fas fa-cookie"></i> SNACKS</a>
+                        <a href="cust-about.html" class="cust-nav-link"><i class="fas fa-envelope"></i> ABOUT</a>
+                        <a href="cust-profile.html" class="cust-nav-link"><i class="fas fa-user"></i> PROFILE</a>
+                        <a href="cust-cart.html" class="cust-nav-link"><i class="fas fa-shopping-cart"></i> CART</a>
+                    </nav>
+                    <button class="cust-logout" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Log out</button>
+                </aside>
+                <main class="cust-main">
+                    <div class="cust-top-bar">
+                        <h2 class="cust-page-title">Drinks</h2>
+                        <div class="cust-user">
+                            <span id="cust-name">User</span>
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                    </div>
+                    <div class="menu-grid">
+                        <div class="menu-item-card">
+                            <img src="latte.png" alt="Istilo Latte" class="menu-img">
+                            <h3>Istilo Latte</h3>
+                            <p class="menu-price">₱49</p>
+                            <button class="add-to-cart-btn" onclick="addToCart('Istilo Latte', 49)">Add to Cart</button>
+                        </div>
+                        <div class="menu-item-card">
+                            <img src="matcha.png" alt="Strawberry Matcha" class="menu-img">
+                            <h3>Strawberry Matcha</h3>
+                            <p class="menu-price">₱59</p>
+                            <button class="add-to-cart-btn" onclick="addToCart('Strawberry Matcha', 59)">Add to Cart</button>
+                        </div>
+                        <div class="menu-item-card">
+                            <img src="green-apple.png" alt="Green Apple" class="menu-img">
+                            <h3>Green Apple</h3>
+                            <p class="menu-price">₱49</p>
+                            <button class="add-to-cart-btn" onclick="addToCart('Green Apple', 49)">Add to Cart</button>
+                        </div>
+                        <div class="menu-item-card">
+                            <img src="matcha-latte.png" alt="Matcha Latte" class="menu-img">
+                            <h3>Matcha Latte</h3>
+                            <p class="menu-price">₱49</p>
+                            <button class="add-to-cart-btn" onclick="addToCart('Matcha Latte', 49)">Add to Cart</button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

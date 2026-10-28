@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About — Istilo Coffee Shop</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="main-app">
+        <div class="customer-view">
+            <div class="cust-layout">
+                <aside class="cust-sidebar">
+                    <div class="cust-logo">
+                        <img src="istilo logo.png" alt="Istilo Logo" class="cust-logo-img">
+                        <h1>Istilo</h1>
+                        <button class="cust-menu-btn" onclick="toggleCustSidebar()"><i class="fas fa-bars"></i></button>
+                    </div>
+                    <nav class="cust-nav">
+                        <a href="index.html" class="cust-nav-link"><i class="fas fa-home"></i> HOME</a>
+                        <a href="cust-drinks.html" class="cust-nav-link"><i class="fas fa-mug-hot"></i> DRINKS</a>
+                        <a href="cust-snacks.html" class="cust-nav-link"><i class="fas fa-cookie"></i> SNACKS</a>
+                        <a href="cust-about.html" class="cust-nav-link active"><i class="fas fa-envelope"></i> ABOUT</a>
+                        <a href="cust-profile.html" class="cust-nav-link"><i class="fas fa-user"></i> PROFILE</a>
+                        <a href="cust-cart.html" class="cust-nav-link"><i class="fas fa-shopping-cart"></i> CART</a>
+                    </nav>
+                    <button class="cust-logout" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Log out</button>
+                </aside>
+                <main class="cust-main">
+                    <div class="cust-top-bar">
+                        <h2 class="cust-page-title">About Us</h2>
+                        <div class="cust-user">
+                            <span id="cust-name">User</span>
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                    </div>
+                    <div class="about-card">
+                        <h3>Welcome to Istilo Coffee Shop ☕</h3>
+                        <p><strong>Coffee with Style</strong> — We serve premium handcrafted drinks and snacks made with the finest ingredients. Established in 2025, Istilo brings you the perfect blend of taste and style.</p>
+                        <div class="about-info">
+                            <p><strong>📍 Location:</strong> Calamba, Laguna, Philippines</p>
+                            <p><strong>🕐 Hours:</strong> Mon–Sat: 8:00 AM – 9:00 PM</p>
+                            <p><strong>📞 Contact:</strong> +63 912 345 6789</p>
+                            <p><strong>📧 Email:</strong> hello@istilo.com</p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

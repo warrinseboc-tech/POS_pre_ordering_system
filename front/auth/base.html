@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Istilo Coffee Shop{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='auth/auth.css') }}">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-panel">
+            <h1 class="brand-name">ISTILO</h1>
+            <p class="tagline">coffee with style</p>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}" role="alert">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+    <script>
+        function togglePass(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            const show = input.type === "password";
+            input.type = show ? "text" : "password";
+            icon.className = show ? "fas fa-eye" : "fas fa-eye-slash";
+        }
+    </script>
+</body>
+</html>

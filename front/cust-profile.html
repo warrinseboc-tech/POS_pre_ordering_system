@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profile — Istilo Coffee Shop</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="main-app">
+        <div class="customer-view">
+            <div class="cust-layout">
+                <aside class="cust-sidebar">
+                    <div class="cust-logo">
+                        <img src="istilo logo.png" alt="Istilo Logo" class="cust-logo-img">
+                        <h1>Istilo</h1>
+                        <button class="cust-menu-btn" onclick="toggleCustSidebar()"><i class="fas fa-bars"></i></button>
+                    </div>
+                    <nav class="cust-nav">
+                        <a href="{{ url_for('dashboard') }}" class="cust-nav-link"><i class="fas fa-home"></i> HOME</a>
+                        <a href="cust-drinks.html" class="cust-nav-link"><i class="fas fa-mug-hot"></i> DRINKS</a>
+                        <a href="cust-snacks.html" class="cust-nav-link"><i class="fas fa-cookie"></i> SNACKS</a>
+                        <a href="cust-about.html" class="cust-nav-link"><i class="fas fa-envelope"></i> ABOUT</a>
+                        <a href="cust-profile.html" class="cust-nav-link active"><i class="fas fa-user"></i> PROFILE</a>
+                        <a href="cust-cart.html" class="cust-nav-link"><i class="fas fa-shopping-cart"></i> CART</a>
+                    </nav>
+                    <form method="post" action="{{ url_for('logout') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button class="cust-logout" type="submit"><i class="fas fa-sign-out-alt"></i> Log out</button>
+                    </form>
+                </aside>
+                <main class="cust-main">
+                    <div class="cust-top-bar">
+                        <h2 class="cust-page-title">My Profile</h2>
+                        <div class="cust-user">
+                            <span>{{ session.get('user_email') }}</span>
+                            <i class="fas fa-user-circle"></i>
+                        </div>
+                    </div>
+                    <div class="profile-card">
+                        <div class="profile-avatar"><i class="fas fa-user"></i></div>
+                        <div class="profile-info">
+                            <p><strong>Full Name:</strong> <span id="p-fullname">—</span></p>
+                            <p><strong>Email:</strong> <span id="p-email">—</span></p>
+                            <p><strong>Email:</strong> <span>{{ session.get('user_email') }}</span></p>
+                            <p><strong>Phone:</strong> <span>{{ session.get('phone') }}</span></p>
+                            <p><strong>Role:</strong> <span class="role-badge cust-role">Customer</span></p>
+                            <p><strong>Status:</strong> Active</p>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

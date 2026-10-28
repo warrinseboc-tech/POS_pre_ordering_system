@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Snacks Management</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="main-app">
+        <div class="admin-view">
+            <div class="admin-layout">
+                <aside class="admin-sidebar">
+                    <div class="admin-logo">
+                        <img src="istilo logo.png" alt="Istilo Logo" class="admin-logo-img">
+                        <h1>Istilo</h1>
+                        <button class="admin-menu-btn" onclick="toggleAdminSidebar()"><i class="fas fa-bars"></i></button>
+                    </div>
+                    <nav class="admin-nav">
+                        <a href="index.html" class="admin-nav-link"><i class="fas fa-home"></i> HOME</a>
+                        <a href="admin-drinks.html" class="admin-nav-link"><i class="fas fa-mug-hot"></i> DRINKS</a>
+                        <a href="admin-snacks.html" class="admin-nav-link active"><i class="fas fa-cookie"></i> SNACKS</a>
+                        <a href="admin-about.html" class="admin-nav-link"><i class="fas fa-envelope"></i> ABOUT</a>
+                        <a href="admin-profile.html" class="admin-nav-link"><i class="fas fa-user"></i> PROFILE</a>
+                    </nav>
+                    <button class="admin-logout" onclick="handleLogout()"><i class="fas fa-sign-out-alt"></i> Log out</button>
+                </aside>
+                <main class="admin-main">
+                    <div class="admin-top-bar">
+                        <h2 class="admin-page-title">Snacks Management</h2>
+                        <p class="admin-tagline">Add, Edit & Delete Snacks</p>
+                        <div class="admin-badge">Admin</div>
+                    </div>
+                    <div class="add-form-card">
+                        <h3>Add New Snack</h3>
+                        <div class="form-grid">
+                            <input type="text" id="snack-name" placeholder="Snack Name">
+                            <input type="number" id="snack-price" placeholder="Price" step="1">
+                            <select id="snack-status">
+                                <option value="Available">Available</option>
+                                <option value="Low Stock">Low Stock</option>
+                                <option value="Unavailable">Unavailable</option>
+                            </select>
+                            <button class="add-btn" onclick="addSnack()">Add Snack</button>
+                        </div>
+                    </div>
+                    <div class="admin-card items-card">
+                        <h3 class="card-title">Snacks List</h3>
+                        <div class="items-header">
+                            <span>#</span><span>Image</span><span>Name</span><span>Price</span><span>Status</span><span>Actions</span>
+                        </div>
+                        <div id="snacks-list"></div>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

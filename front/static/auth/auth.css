@@ -1,0 +1,150 @@
+/* Class names match your index.html (auth-container, auth-panel, brand-name,
+   input-field, pass-wrap, eye-btn, auth-btn, auth-link), so if your own
+   styles.css already styles them you can link that file instead of this one. */
+
+:root {
+  --espresso: #2a1a12;
+  --roast: #3d271b;
+  --foam: #f4efe6;
+  --ink: #2a1a12;
+  --muted: #7a6a5e;
+  --line: #d9cfc1;
+  --matcha: #6f9a4a;
+  --matcha-dark: #577a38;
+  --error: #a62b1f;
+  --warn: #8a6100;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Bricolage Grotesque", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: radial-gradient(120% 90% at 50% 0%, var(--roast), var(--espresso));
+}
+
+.auth-container {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-panel {
+  width: 100%;
+  max-width: 380px;
+  background: var(--foam);
+  border-radius: 14px;
+  padding: 40px 32px 28px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .45);
+}
+
+.brand-name {
+  margin: 0;
+  text-align: center;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: .28em;
+  padding-left: .28em;          /* balances the trailing letter-spacing */
+}
+
+.tagline {
+  margin: 6px 0 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: .95rem;
+}
+.tagline::after {
+  content: "";
+  display: block;
+  width: 36px; height: 3px;
+  margin: 14px auto 0;
+  background: var(--matcha);
+  border-radius: 2px;
+}
+
+.flash {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  font-size: .9rem;
+  background: #fff;
+  border-left: 4px solid;
+  border-radius: 3px;
+}
+.flash.error   { border-color: var(--error); color: var(--error); }
+.flash.warning { border-color: #e0a800;      color: var(--warn); }
+.flash.success { border-color: var(--matcha); color: var(--matcha-dark); }
+
+.input-field { margin-bottom: 18px; }
+.input-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: .9rem;
+  font-weight: 600;
+}
+.input-field input {
+  width: 100%;
+  padding: 12px;
+  font: inherit;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+}
+.input-field input::placeholder { color: #a99b8d; }
+
+.input-field input:focus-visible,
+.eye-btn:focus-visible,
+.auth-btn:focus-visible,
+.auth-link a:focus-visible {
+  outline: 3px solid var(--matcha);
+  outline-offset: 2px;
+}
+
+.pass-wrap { position: relative; }
+.pass-wrap input { padding-right: 46px; }
+.eye-btn {
+  position: absolute;
+  right: 4px; top: 50%;
+  transform: translateY(-50%);
+  width: 38px; height: 38px;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.auth-btn {
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: #fff;
+  background: var(--matcha);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s ease;
+}
+.auth-btn:hover { background: var(--matcha-dark); }
+
+.auth-link {
+  margin-top: 20px;
+  text-align: center;
+  font-size: .92rem;
+  color: var(--muted);
+}
+.auth-link a { color: var(--matcha-dark); font-weight: 700; }
+
+@media (max-width: 420px) {
+  .auth-panel { padding: 32px 20px 22px; }
+  .brand-name { font-size: 2.1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-btn { transition: none; }
+}

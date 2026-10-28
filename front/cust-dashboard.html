@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard · Istillo Coffee Shop</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .dashboard-welcome {
+            background: linear-gradient(135deg, #5c3317, #a34c19);
+            border-radius: 16px;
+            color: #fff;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+        .dashboard-welcome h1 { margin: 0 0 8px; }
+        .dashboard-welcome p { margin: 0; }
+        .dashboard-card {
+            background: #fff;
+            border: 1px solid #deb887;
+            border-radius: 14px;
+            box-shadow: 0 4px 12px rgba(139, 69, 19, .08);
+            color: #5c3317;
+            padding: 22px;
+            margin-bottom: 16px;
+        }
+        .dashboard-card a { color: #8b4513; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="cust-layout">
+        <aside class="cust-sidebar">
+            <div class="cust-logo"><h1>Istillo</h1></div>
+            <nav class="cust-nav">
+                <a href="{{ url_for('dashboard') }}" class="cust-nav-link active"><i class="fas fa-home"></i> Dashboard</a>
+                <a href="{{ url_for('profile') }}" class="cust-nav-link"><i class="fas fa-user"></i> Profile</a>
+            </nav>
+            <form method="post" action="{{ url_for('logout') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="cust-logout" type="submit"><i class="fas fa-sign-out-alt"></i> Log out</button>
+            </form>
+        </aside>
+        <main class="cust-main">
+            <div class="cust-top-bar">
+                <h2>Customer Dashboard</h2>
+                <div class="cust-user"><span>{{ session.get('user_email') }}</span><i class="fas fa-user-circle"></i></div>
+            </div>
+            <section class="dashboard-welcome">
+                <h1>Welcome to Istillo</h1>
+                <p>Your email is verified and your account is ready.</p>
+            </section>
+            <section class="dashboard-card">
+                <h2>Account</h2>
+                <p><strong>Email:</strong> {{ session.get('user_email') }}</p>
+                <p><strong>Phone:</strong> {{ session.get('phone') }}</p>
+                <a href="{{ url_for('profile') }}">View your profile</a>
+            </section>
+        </main>
+    </div>
+</body>
+</html>
