@@ -1,0 +1,208 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ISTILO | Admin Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="script.js" defer></script>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand">
+    ☕ ISTILO
+    <small>ADMIN PANEL</small>
+  </div>
+
+  <nav>
+    <button class="nav active" data-page="dashboard">▦ Dashboard</button>
+    <button class="nav" data-page="orders">☷ Pre-Orders</button>
+    <button class="nav" data-page="products">☕ Product Management</button>
+    <button class="nav" data-page="expenses">₱ Expenses Management</button>
+    <button class="nav" data-page="analytics">▥ Sales Analytics</button>
+    <button class="nav" data-page="reports">▧ Sales Reports</button>
+    <button class="nav" data-page="staff">♙ Staff Management</button>
+  </nav>
+
+  <div class="sidebar-footer">ISTILO Coffee Shop</div>
+</aside>
+
+<main class="main">
+  <header class="topbar">
+    <div>
+      <h1 id="pageTitle">Dashboard</h1>
+      <p>ISTILO Coffee Shop Management System</p>
+    </div>
+    <span class="admin-label">● Admin Account</span>
+  </header>
+
+  <!-- DASHBOARD -->
+  <section id="dashboard" class="page active">
+    <div class="stats" id="dashboardStats"></div>
+
+    <div class="panel">
+      <h2>Financial Overview</h2>
+      <div class="chart-wrap">
+        <canvas id="dashboardChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Recent Expenses</h2>
+      <div id="recentExpenses"></div>
+    </div>
+  </section>
+
+  <!-- PRE-ORDERS -->
+  <section id="orders" class="page">
+    <div class="panel">
+      <h2>Customer Pre-Orders</h2>
+      <div id="ordersTable"></div>
+    </div>
+  </section>
+
+  <!-- PRODUCTS -->
+  <section id="products" class="page">
+    <div class="panel">
+      <div class="section-heading">
+        <h2>Product Management</h2>
+        <button class="primary" id="addProductBtn">+ Add Product</button>
+      </div>
+      <div id="productsTable"></div>
+    </div>
+  </section>
+
+  <!-- EXPENSES -->
+  <section id="expenses" class="page">
+    <div class="stats" id="expenseStats"></div>
+
+    <div class="panel">
+      <div class="section-heading">
+        <h2>Expenses Management</h2>
+        <button class="primary" id="addExpenseBtn">+ Add Expense</button>
+      </div>
+
+      <div id="expensesTable"></div>
+    </div>
+  </section>
+
+  <!-- ANALYTICS -->
+  <section id="analytics" class="page">
+    <div class="stats" id="analyticsStats"></div>
+
+    <div class="panel">
+      <h2>Sales Analytics</h2>
+      <div class="chart-wrap">
+        <canvas id="analyticsChart"></canvas>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Product Performance</h2>
+      <div id="productPerformance"></div>
+    </div>
+  </section>
+
+  <!-- REPORTS -->
+  <section id="reports" class="page">
+    <div class="panel">
+      <h2>Sales Reports</h2>
+      <p>Export sales and expense records.</p>
+      <button class="primary" id="exportBtn">Export CSV Report</button>
+      <div id="reportsTable"></div>
+    </div>
+  </section>
+
+  <!-- STAFF -->
+  <section id="staff" class="page">
+    <div class="panel">
+      <div class="section-heading">
+        <h2>Staff Management</h2>
+        <button class="primary" id="addStaffBtn">+ Add Staff</button>
+      </div>
+      <div id="staffTable"></div>
+    </div>
+  </section>
+</main>
+
+<!-- PRODUCT MODAL -->
+<dialog id="productDialog">
+  <form id="productForm">
+    <h2 id="productFormTitle">Add Product</h2>
+    <input type="hidden" id="editProductId">
+
+    <label>Product Name</label>
+    <input id="productName" required maxlength="100">
+
+    <label>Category</label>
+    <select id="productCategory">
+      <option>Coffee Series</option>
+      <option>Milktea Series</option>
+      <option>Frappe Series</option>
+      <option>Latte Series</option>
+      <option>Matcha Series</option>
+      <option>Fruit Series</option>
+      <option>Snacks</option>
+    </select>
+
+    <label>Description</label>
+    <textarea id="productDescription" rows="3"></textarea>
+
+    <label>Price (₱)</label>
+    <input id="productPrice" type="number" min="0.01" step="0.01" required>
+
+    <label>Status</label>
+    <select id="productStatus">
+      <option value="true">Available</option>
+      <option value="false">Unavailable</option>
+    </select>
+
+    <div class="dialog-actions">
+      <button type="button" class="secondary" id="cancelProductBtn">Cancel</button>
+      <button type="submit" class="primary">Save Product</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- EXPENSE MODAL -->
+<dialog id="expenseDialog">
+  <form id="expenseForm">
+    <h2 id="expenseFormTitle">Add Expense</h2>
+    <input type="hidden" id="editExpenseId">
+
+    <label>Expense Name</label>
+    <input id="expenseName" required maxlength="100">
+
+    <label>Category</label>
+    <select id="expenseCategory">
+      <option>Ingredients</option>
+      <option>Utilities</option>
+      <option>Rent</option>
+      <option>Employee Salary</option>
+      <option>Supplies</option>
+      <option>Equipment</option>
+      <option>Maintenance</option>
+      <option>Others</option>
+    </select>
+
+    <label>Amount (₱)</label>
+    <input id="expenseAmount" type="number" min="0.01" step="0.01" required>
+
+    <label>Date</label>
+    <input id="expenseDate" type="date" required>
+
+    <label>Description</label>
+    <textarea id="expenseDescription" rows="3"></textarea>
+
+    <div class="dialog-actions">
+      <button type="button" class="secondary" id="cancelExpenseBtn">Cancel</button>
+      <button type="submit" class="primary">Save Expense</button>
+    </div>
+  </form>
+</dialog>
+
+</body>
+</html>
