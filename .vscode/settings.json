@@ -1,4 +1,4 @@
 {
-    "liveServer.settings.port": 5501,
-    "python.terminal.useEnvFile": true
+  "python.terminal.useEnvFile": true,
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe"
 }

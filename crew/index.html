@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1c211e"><title>ISTILO | Crew Portal</title>
+  <link rel="stylesheet" href="../shared/ui.css"><link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../shared/theme.css">
+  <script defer src="../shared/store.js"></script><script defer src="../shared/components.js"></script><script defer src="ordering.js"></script><script defer src="order-editor.js"></script><script defer src="app.js"></script>
+</head>
+<body>
+  <section id="login" class="login-wrap">
+    <div class="login-story"><a class="brand" href="../customer/index.html"><span class="brand-icon" aria-hidden="true">☕</span><span><strong>ISTILO</strong><small>Coffee with style</small></span></a><div><span class="eyebrow">Behind every good cup</span><h1>A little teamwork.<br>A lot of good coffee.</h1><p>Your workspace for the day, from the first order to the last cup.</p></div><small>THE CREW WORKSPACE / ISTILO</small></div>
+    <div class="login-panel"><form id="loginForm" class="login-card"><span class="eyebrow">Let’s get the day brewing</span><h2>Crew sign in</h2><p class="muted">Welcome back. Your counter is waiting.</p><label class="field">Employee ID<input id="employee" autocomplete="username" placeholder="CREW001" maxlength="40" required></label><label class="field">Password<input id="password" type="password" autocomplete="current-password" placeholder="Enter your password" required></label><button class="primary full">Sign in →</button><p id="loginError" class="error" role="alert"></p><div class="notice">Sign in with your assigned employee account. Ask the administrator for your initial password.</div><a class="textbutton" href="../customer/index.html">View customer menu ↗</a></form></div>
+  </section>
+  <div id="app" class="app" hidden>
+    <aside id="sidebar" class="sidebar"><a class="brand" href="#dashboard"><span class="brand-icon" aria-hidden="true">☕</span><span><strong>ISTILO</strong><small>Crew workspace</small></span></a><div class="sidebar-label">YOUR WORKSPACE</div><nav id="nav" aria-label="Crew navigation"></nav><div class="sidefoot"><div class="staff-label"><span class="avatar">C</span><div><strong id="sideUser">CREW001</strong><small>Crew member</small></div></div><button id="logout" class="outline full">Log out ↗</button></div></aside>
+    <main class="main"><header class="crew-header"><div class="row"><button id="menuToggle" class="iconbutton mobile-only" aria-label="Toggle navigation" aria-controls="sidebar" aria-expanded="false">☰</button><div><div class="eyebrow">ISTILO COFFEE SHOP</div><h2 id="pageTitle">Dashboard</h2></div></div><div class="header-right"><span id="today"></span><span class="local-status"><span class="status-dot"></span> Connected</span></div></header><div id="content" tabindex="-1"></div></main>
+  </div>
+  <dialog id="orderEditDialog" aria-label="Edit customer order"></dialog>
+  <dialog id="productDialog" aria-labelledby="detailName"></dialog>
+  <dialog id="confirmDialog" aria-labelledby="confirmTitle"><div class="dialog-body"><h2 id="confirmTitle">Cancel this order?</h2><p>This will move the order to cancelled history.</p><div class="row"><button class="outline" id="keepOrder">Keep order</button><button class="danger" id="confirmCancel">Cancel order</button></div></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <aside id="onlinePopup" class="online-popup" role="status" hidden><div class="row between"><strong>New online order</strong><button id="dismissOnlinePopup" class="iconbutton" aria-label="Dismiss online notification">×</button></div><p id="onlinePopupText"></p><button id="reviewOnlineOrder" class="primary full">Review in Ordering →</button></aside>
+  <noscript><p class="loading-note">Please enable JavaScript to use the crew portal.</p></noscript>
+</body>
+</html>

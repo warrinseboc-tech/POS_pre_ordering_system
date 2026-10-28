@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [{
+    "name": "ISTILO - Python + MySQL",
+    "type": "debugpy",
+    "request": "launch",
+    "program": "${workspaceFolder}/backend/app.py",
+    "cwd": "${workspaceFolder}",
+    "console": "integratedTerminal",
+    "jinja": false
+  }]
+}

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1c211e">
+  <title>ISTILO | Coffee with style</title>
+  <link rel="stylesheet" href="../shared/ui.css">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../shared/theme.css">
+  <script defer src="../shared/store.js"></script>
+  <script defer src="../shared/components.js"></script>
+  <script defer src="payments.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="customer-header">
+    <a class="brand" href="#menu" aria-label="ISTILO home"><span class="brand-icon" aria-hidden="true">☕</span><span><strong>ISTILO</strong><small>Coffee with style</small></span></a>
+    <nav aria-label="Main navigation"><a href="#menu" data-nav="menu">Menu</a><a href="#about" data-nav="about">About</a><a href="#contact" data-nav="contact">Contact</a></nav>
+    <button id="cartButton" class="outline">My order <span id="cartCount" class="cart-count">0</span></button>
+  </header>
+  <main id="content" tabindex="-1"></main>
+  <footer><a class="brand" href="#menu"><strong>ISTILO</strong></a><span>A little pause. A cup of your own.</span><small>Canlubang, Calamba, Palao, Paikit, 4027 · GCash & Maya</small></footer>
+  <dialog id="productDialog" aria-labelledby="detailName"></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <noscript><p class="loading-note">Please enable JavaScript to browse the menu and place an order.</p></noscript>
+</body>
+</html>
