@@ -36,7 +36,7 @@
     }
     function render() {
       S.syncCart(cart);
-      return `<div class="ordering-intro"><div><span class="eyebrow">Walk-in & online · One counter</span><h2>Ordering station</h2></div><span class="mini-note">Choose → Review → Punch → Prepare → Complete</span></div><div class="ordering-station"><aside class="card incoming-pane" id="incomingQueue" aria-label="Incoming online orders">${queueHTML()}</aside><section class="card product-pane" id="punchMenu">${productHTML()}</section><aside class="card current-pane" id="currentOrder">${currentHTML()}</aside></div>`;
+      return `<div class="ordering-intro"><div><span class="eyebrow">Walk-in & online · One counter</span><h2>Ordering station</h2></div><span class="mini-note">Choose → Review → Punch → Prepare → Complete</span></div><div class="ordering-station"><section class="card product-pane" id="punchMenu">${productHTML()}</section><aside class="card current-pane" id="currentOrder">${currentHTML()}</aside></div>`;
     }
     function select(id) { if (busy) return; selectedId = id; onlineCash = ''; error = ''; receipt = null; rerender(); }
     function resetSelection() { selectedId = null; onlineCash = ''; error = ''; }
@@ -57,7 +57,13 @@
       });
       $('orderSearch').oninput = event => { search = event.target.value; const position = event.target.selectionStart; const menu = $('punchMenu'); menu.innerHTML = productHTML(); bind(root); const input = $('orderSearch'); input.focus(); input.setSelectionRange(position, position); };
       $('walkInMode').onclick = () => { resetSelection(); rerender(); };
-      $('clearCurrent').onclick = () => { if (!selectedId) { cart.splice(0); Object.assign(draft, { customer:'',type:'Takeaway',payment:'Cash',cash:'' }); } resetSelection(); rerender(); };
+      $('clearCurrent').onclick = () => {
+        const hasWalkIn=!selectedId&&cart.length>0;
+        const hasSelection=!!selectedId;
+        if(hasWalkIn&&!window.confirm('Clear all items from the current walk-in order?'))return;
+        if(hasSelection&&!window.confirm('Leave this order and return to the walk-in counter?'))return;
+        if (!selectedId) { cart.splice(0); Object.assign(draft, { customer:'',type:'Takeaway',payment:'Cash',cash:'' }); } resetSelection(); rerender();
+      };
       if (!selectedId) {
         $('orderCustomer').oninput = event => { draft.customer = event.target.value; };
         $('orderType').onchange = event => { draft.type = event.target.value; };

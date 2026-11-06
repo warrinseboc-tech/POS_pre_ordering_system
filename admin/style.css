@@ -83,6 +83,7 @@ nav {
 }
 
 .sidebar-footer a{display:block;color:inherit;text-decoration:none;margin-bottom:12px}.sidebar{overflow-y:auto}.connection-note,.help-text{font-size:12px;line-height:1.6;color:var(--muted)}.connection-note{margin:-10px 0 24px}.admin-status{position:fixed;bottom:20px;right:20px;z-index:100;max-width:min(440px,calc(100vw - 40px));padding:16px 22px;background:var(--dark);color:white;border-radius:12px;box-shadow:0 8px 30px #0003}.chart-fallback{font-size:12px;display:grid;gap:8px;max-height:300px;overflow:auto}.chart-fallback div{display:flex;justify-content:space-between;gap:15px;padding:10px;background:var(--cream)}.order-items{display:block;color:var(--muted);font-size:11px;line-height:1.6;margin-top:6px}button:focus-visible,a:focus-visible{outline:2px solid var(--caramel);outline-offset:3px}button:disabled{opacity:.5;cursor:not-allowed}
+.admin-menu-toggle{display:none}
 
 .main {
   margin-left: 245px;
@@ -249,6 +250,7 @@ th {
   height: 320px;
   position: relative;
 }
+.analytics-charts{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:18px}.analytics-charts .chart-wrap{min-width:0}.report-controls{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:18px 0}.report-controls label{display:grid;gap:7px;font-size:12px;font-weight:700}.report-controls input,.report-controls select{min-width:180px}.report-chart-wrap{height:280px;margin-bottom:18px}
 
 dialog {
   border: 0;
@@ -273,23 +275,31 @@ dialog::backdrop {
   .stats {
     grid-template-columns: repeat(2, 1fr);
   }
+  .analytics-charts{grid-template-columns:1fr}
 }
 
 @media (max-width: 700px) {
+  .section-heading{align-items:flex-start;flex-direction:column}
+  .section-heading .row{width:100%}
+  .section-heading .row label{flex:1 1 170px}
+  .section-heading input[type="date"]{max-width:220px}
+  .admin-menu-toggle{display:inline-flex}
   .sidebar {
-    position: static;
-    width: 100%;
-    padding: 12px;
+    position: fixed;
+    width: min(280px,85vw);
+    padding: 20px 12px;
+    z-index: 50;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    box-shadow: 10px 0 40px #0004;
   }
+  .sidebar.open{transform:translateX(0)}
 
   .brand {
     padding: 8px;
   }
 
-  nav {
-    display: flex;
-    overflow-x: auto;
-  }
+  nav {display:grid;overflow-y:auto}
 
   .nav {
     white-space: nowrap;

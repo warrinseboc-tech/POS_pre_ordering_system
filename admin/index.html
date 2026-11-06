@@ -16,7 +16,7 @@
 <section id="adminLogin" class="admin-login"><form id="adminLoginForm" class="panel"><img class="admin-logo" src="../shared/assets/logo.jpg" alt="ISTILO"><h1>Admin sign in</h1><p>Use your administrator account.</p><label for="adminEmployee">Employee ID</label><input id="adminEmployee" autocomplete="username" required><label for="adminPassword">Password</label><input id="adminPassword" type="password" autocomplete="current-password" required><button class="primary">Sign in</button><p id="adminLoginError" class="error" role="alert"></p></form></section>
 <div id="adminWorkspace" hidden>
 
-<aside class="sidebar">
+<aside class="sidebar" id="adminSidebar">
   <div class="brand">
     <img class="admin-logo" src="../shared/assets/logo.jpg" alt=""> ISTILO
     <small>ADMIN PANEL</small>
@@ -37,6 +37,7 @@
 
 <main class="main">
   <header class="topbar">
+    <button type="button" id="adminMenuToggle" class="secondary admin-menu-toggle" aria-label="Toggle admin navigation" aria-controls="adminSidebar" aria-expanded="false">☰ Menu</button>
     <div>
       <h1 id="pageTitle">Dashboard</h1>
       <p>ISTILO Coffee Shop Management System</p>
@@ -91,7 +92,14 @@
     <div class="panel">
       <div class="section-heading">
         <h2>Expenses Management</h2>
-        <button class="primary" id="addExpenseBtn">+ Add Expense</button>
+        <div class="row wrap">
+          <label class="row" for="expenseDateFilter">View date
+            <input type="date" id="expenseDateFilter" aria-label="Filter expenses by date">
+          </label>
+          <button class="secondary" type="button" id="clearExpenseDateFilter">Clear</button>
+          <button class="secondary" type="button" id="exportExpenseReportBtn">Download Excel</button>
+          <button class="primary" id="addExpenseBtn">+ Add Expense</button>
+        </div>
       </div>
 
       <div id="expensesTable"></div>
@@ -104,8 +112,9 @@
 
     <div class="panel">
       <h2>Sales Analytics</h2>
-      <div class="chart-wrap">
-        <canvas id="analyticsChart"></canvas>
+      <div class="analytics-charts">
+        <div class="chart-wrap"><canvas id="analyticsChart"></canvas></div>
+        <div class="chart-wrap"><canvas id="analyticsPieChart"></canvas></div>
       </div>
     </div>
 
@@ -120,7 +129,15 @@
     <div class="panel">
       <h2>Sales Reports</h2>
       <p>Export sales and expense records.</p>
-      <button class="primary" id="exportBtn">Export CSV Report</button>
+      <div class="report-controls">
+        <label>Report date <input type="date" id="reportDateFilter"></label>
+        <label>Crew member
+          <select id="reportCrewFilter"><option value="">All crew</option></select>
+        </label>
+        <button class="secondary" type="button" id="clearReportFilters">Clear filters</button>
+        <button class="primary" id="exportBtn">Export CSV Report</button>
+      </div>
+      <div class="chart-wrap report-chart-wrap"><canvas id="reportChart"></canvas></div>
       <div id="reportsTable"></div>
     </div>
   </section>

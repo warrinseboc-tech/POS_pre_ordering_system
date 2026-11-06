@@ -10,7 +10,7 @@
     toastTimer = setTimeout(() => { box.hidden = true; }, 5000);
   }
   function card(p, action = 'product') {
-    return `<article class="product"><div class="product-art" data-category="${e(p.category)}" aria-hidden="true">${p.icon}</div><small>${e(p.category)}</small><h3>${e(p.name)}</h3><p>${e(p.description)}</p><div class="row between"><span class="price">${S.money(p.price)}</span><button class="primary" data-${action}="${p.id}" ${S.available(p.id) ? '' : 'disabled'}>${S.available(p.id) ? 'Choose options ↗' : 'Sold out'}</button></div></article>`;
+    return `<article class="product"><div class="product-art" data-category="${e(p.category)}" aria-hidden="true">${p.icon}</div><small>${e(p.category)}</small><h3>${e(p.name)}</h3><p>${e(p.description)}</p><div class="row between"><span class="price">${S.money(p.price)}</span><button class="primary" data-${action}="${p.id}" ${S.available(p.id) ? '' : 'disabled'}>${S.available(p.id) ? 'Add to Cart ↗' : 'Sold out'}</button></div></article>`;
   }
   function cartHTML(cart, editable = true) {
     if (!cart.length) return '<div class="empty">Your cart is taking a coffee break.<br>Add something from the menu.</div>';
@@ -28,13 +28,25 @@
   function picker(cart, done) {
     const dialog = document.getElementById('productDialog');
     let product;
-    dialog.innerHTML = `<form class="dialog-body" id="productForm"><div class="row between"><span class="eyebrow">Make it yours</span><button type="button" class="iconbutton" id="closeProduct" aria-label="Close product details">×</button></div><div id="detailArt" class="product-art" aria-hidden="true"></div><h2 id="detailName"></h2><p id="detailDescription"></p><div class="grid two"><label class="field">Flavor<select id="detailFlavor"></select></label><label class="field">Size<select id="detailSize"></select></label></div><label class="field">Quantity<input id="detailQty" type="number" min="1" max="99" step="1" value="1" required></label><div class="summary-total"><span>Item total</span><strong id="detailTotal"></strong></div><button class="primary full">Add to cart →</button></form>`;
+    dialog.innerHTML = `<form class="dialog-body" id="productForm"><div class="row between"><span class="eyebrow">Make it yours</span><button type="button" class="iconbutton" id="closeProduct" aria-label="Close product details">×</button></div><div id="detailArt" class="product-art" aria-hidden="true"></div><h2 id="detailName"></h2><p id="detailDescription"></p><div class="grid two"><label class="field">Flavor<select id="detailFlavor"></select></label><label class="field">Type<select id="detailSize"></select></label></div><label class="field">Quantity<div class="quantity-stepper"><button type="button" id="detailQtyMinus" aria-label="Decrease quantity">−</button><input id="detailQty" type="number" min="1" max="99" step="1" value="1" required aria-label="Quantity"><button type="button" id="detailQtyPlus" aria-label="Increase quantity">+</button></div></label><div class="summary-total"><span>Item total</span><strong id="detailTotal"></strong></div><button class="primary full">Add to cart →</button></form>`;
     const q = id => dialog.querySelector('#' + id);
     function price() { return product.price + Number(q('detailSize').selectedOptions[0].dataset.extra); }
     function update() { q('detailTotal').textContent = S.money(price() * Math.max(1, Number(q('detailQty').value) || 1)); }
     q('closeProduct').onclick = () => dialog.close();
     q('detailSize').onchange = update;
     q('detailQty').oninput = update;
+    q('detailQty').onchange = () => {
+      q('detailQty').value = Math.min(99, Math.max(1, Number(q('detailQty').value) || 1));
+      update();
+    };
+    q('detailQtyMinus').onclick = () => {
+      q('detailQty').value = Math.max(1, (Number(q('detailQty').value) || 1) - 1);
+      update();
+    };
+    q('detailQtyPlus').onclick = () => {
+      q('detailQty').value = Math.min(99, (Number(q('detailQty').value) || 1) + 1);
+      update();
+    };
     q('productForm').onsubmit = event => {
       event.preventDefault();
       const qty = Number(q('detailQty').value);
@@ -59,7 +71,9 @@
       q('detailArt').textContent = product.icon;
       q('detailArt').dataset.category = product.category;
       q('detailFlavor').innerHTML = product.flavors.map(f => `<option>${e(f)}</option>`).join('');
-      q('detailSize').innerHTML = product.sizes.map(s => `<option data-extra="${s.extra}">${e(s.name)}</option>`).join('');
+      q('detailSize').innerHTML = product.category === 'Snacks'
+        ? '<option data-extra="0">Regular</option>'
+        : '<option data-extra="0">Hot</option><option data-extra="0">Ice</option>';
       q('detailQty').value = 1;
       update();
       dialog.showModal();

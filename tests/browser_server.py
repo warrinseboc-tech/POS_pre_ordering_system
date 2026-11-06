@@ -21,6 +21,8 @@ with app.app_context():
     with transaction():
         for role in ('admin','crew'):
             execute('INSERT INTO users(id,employee_id,name,email,password_hash,role) VALUES(%s,%s,%s,%s,%s,%s)',(role,role.upper()+'001',role.title(),'',generate_password_hash('Browser-Test-Password!'),role))
+        execute('INSERT INTO accounts(password,user_email,phone,email_verified) VALUES(%s,%s,%s,1)',
+                (generate_password_hash('Browser-Test-Password!'),'customer@example.com','09170000000'))
 image=Image.new('RGB',(440,620),'white')
 ImageDraw.Draw(image).text((30,40),'TEST RECEIPT - NOT A REAL PAYMENT\n'+secrets.token_hex(16),fill='black')
 image.save(ROOT/'.tmp'/'browser-receipt.png')

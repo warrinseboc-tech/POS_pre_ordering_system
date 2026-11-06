@@ -83,6 +83,7 @@
     document.body.classList.toggle('ordering-view', current() === 'pos');
     const page = current(), count = orders().filter(o => o.source === 'Customer' && o.status === 'Pending').length;
     $('nav').innerHTML = pages.map(([id,label,icon]) => `<a class="navbtn ${page === id ? 'active' : ''}" href="#${id}" ${page === id ? 'aria-current="page"' : ''}><span class="nav-icon" aria-hidden="true">${icon}</span>${label}${id === 'pos' && count ? `<span class="nav-count">${count}</span>` : ''}</a>`).join('');
+    $('nav').querySelectorAll('a').forEach(link=>link.onclick=()=>{$('sidebar').classList.remove('open');$('menuToggle').setAttribute('aria-expanded','false');});
     $('pageTitle').textContent = pages.find(p => p[0] === page)[1]; $('sideUser').textContent = profileData().name;
     $('today').textContent = new Date().toLocaleDateString('en-PH',{ timeZone:'Asia/Manila',weekday:'short',month:'short',day:'numeric',year:'numeric' });
     root.innerHTML = ({ dashboard,pos,preorders,menu,history,inquiries,shift,profile })[page](); bind();

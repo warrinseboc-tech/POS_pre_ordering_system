@@ -4,7 +4,7 @@
   const portal = ['admin','crew'].includes(location.pathname.split('/')[1]) ? location.pathname.split('/')[1] : 'customer';
   const categories = [['Coffee','☕','Espresso, made your way.'],['Milk Tea','🧋','Tea, pearls, and a moment to yourself.'],['Frappe','🥤','Cool, creamy, and full of flavor.'],['Latte','☕','Your everyday espresso companion.'],['Matcha','🍵','Earthy matcha meets creamy comfort.'],['Snacks','🥐','Small bites for your coffee break.']].map(([name,icon,description])=>({name,icon,description}));
   const keys=Object.fromEntries(['products','orders','availability','inquiries','shifts','profiles','staff','expenses','proofs'].map(name=>[name,'api:'+name]));
-  let state={products:[],orders:[],availability:{},staff:[],inquiries:[],shifts:[],profiles:{},expenses:[],proofs:[],business:{},wallets:[],user:null,csrf:''};
+  let state={products:[],orders:[],availability:{},staff:[],inquiries:[],shifts:[],profiles:{},expenses:[],proofs:[],business:{},wallets:[],user:null,customer:null,csrf:''};
   let refreshing=null, mutating=0;
   async function api(path, options={}) {
     const headers={'X-Portal':portal,'X-CSRF-Token':state.csrf,...options.headers};
@@ -89,9 +89,9 @@
     addOrder.signature=null;
     return data.order;
   }
-  function syncCart(cart) { cart.forEach(item=>{const p=state.products.find(p=>p.id===item.id),size=p?.sizes.find(s=>s.name===item.size);if(p&&size){item.name=p.name;item.price=Math.round((p.price+size.extra)*100)/100;}}); }
+  function syncCart(cart) { cart.forEach(item=>{const p=state.products.find(p=>p.id===item.id);if(!p)return;item.name=p.name;if(['Hot','Ice','Regular'].includes(item.size)){item.price=p.price;}else{const size=p.sizes.find(s=>s.name===item.size);if(size)item.price=Math.round((p.price+size.extra)*100)/100;}}); }
   const store={ categories,keys,read,write,api,refresh,mutate,uid,money,escape,total,available,transitions,syncCart,
-    get onShift(){return state.onShift === true;},get products(){return clone(state.products);},get business(){return clone(state.business);},get user(){return clone(state.user);},get wallets(){return clone(state.wallets);},
+    get onShift(){return state.onShift === true;},get products(){return clone(state.products);},get business(){return clone(state.business);},get user(){return clone(state.user);},get customer(){return clone(state.customer);},get wallets(){return clone(state.wallets);},
     staff:()=>read('staff',[]),crewMember:id=>state.staff.find(s=>s.employeeId===id&&s.active),
     saveProduct:async data=>(await mutate('/products','POST',data)).product,
     addOrder,counterOrder:(cart,details)=>addOrder(cart,{...details,source:'Counter'}),
@@ -101,6 +101,8 @@
     setStatus:(id,status)=>mutate('/orders/'+id+'/status','POST',{status}),
     recordPayment:async(id,paid)=>(await mutate('/orders/'+id+'/cash','POST',{paid})).order,
     login:async(employee,password,role=portal)=>{await mutate('/auth/login','POST',{employee,password,role});return store.user;},
+    customerLogin:async(identifier,password)=>(await mutate('/auth/customer/login','POST',{identifier,password})).user,
+    customerRegister:async(email,phone,password)=>(await mutate('/auth/customer/register','POST',{email,phone,password})).user,
     logout:()=>mutate('/auth/logout'),
     uploadProof:(id,body)=>mutate('/orders/'+id+'/proof','POST',body),
     reviewProof:(id,body)=>mutate('/payments/proofs/'+id+'/review','POST',body),

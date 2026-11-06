@@ -17,12 +17,36 @@
   <a class="skip-link" href="#content">Skip to content</a>
   <header class="customer-header">
     <a class="brand" href="#menu" aria-label="ISTILO home"><span class="brand-icon" aria-hidden="true">☕</span><span><strong>ISTILO</strong><small>Coffee with style</small></span></a>
-    <nav aria-label="Main navigation"><a href="#menu" data-nav="menu">Menu</a><a href="#about" data-nav="about">About</a><a href="#contact" data-nav="contact">Contact</a></nav>
-    <button id="cartButton" class="outline">My order <span id="cartCount" class="cart-count">0</span></button>
+    <button id="customerMenuToggle" class="iconbutton mobile-only customer-menu-toggle" aria-label="Toggle navigation" aria-controls="customerNav" aria-expanded="false">☰</button>
+    <nav id="customerNav" aria-label="Main navigation"><a href="#menu" data-nav="menu">Menu</a><a href="#tracking" data-nav="tracking">Track order</a><a href="#about" data-nav="about">About</a><a href="#contact" data-nav="contact">Contact</a></nav>
+    <div class="header-actions"><button id="loginButton" class="outline">Log in</button></div>
   </header>
   <main id="content" tabindex="-1"></main>
   <footer><a class="brand" href="#menu"><strong>ISTILO</strong></a><span>A little pause. A cup of your own.</span><small>Canlubang, Calamba, Palao, Paikit, 4027 · GCash & Maya</small></footer>
   <dialog id="productDialog" aria-labelledby="detailName"></dialog>
+  <dialog id="customerLoginDialog" aria-labelledby="customerLoginTitle">
+    <form class="dialog-body" id="customerLoginForm">
+      <div class="row between"><span class="eyebrow">Verified customer</span><button type="button" class="iconbutton" id="closeCustomerLogin" aria-label="Close login">×</button></div>
+      <h2 id="customerLoginTitle">Log in to order</h2>
+      <p>Sign in with your verified ISTILO account. You must be logged in before adding items or placing an order.</p>
+      <label class="field">Email or phone<input id="customerIdentifier" name="identifier" autocomplete="username" maxlength="255" required placeholder="you@example.com"></label>
+      <label class="field">Password<input id="customerPassword" name="password" type="password" autocomplete="current-password" maxlength="200" required></label>
+      <button class="primary full" id="customerLoginSubmit">Log in & continue</button>
+      <button class="textbutton full" id="showCustomerRegister" type="button">Create a customer account</button>
+      <p id="customerLoginError" class="error" role="alert"></p>
+    </form>
+    <form class="dialog-body" id="customerRegisterForm" action="/api/auth/customer/register" method="post" hidden>
+      <div class="row between"><span class="eyebrow">New customer</span><button type="button" class="iconbutton" id="closeCustomerRegister" aria-label="Close registration">×</button></div>
+      <h2>Create your account</h2>
+      <p>Register your account to unlock the menu and place pickup orders.</p>
+      <label class="field">Email<input id="customerRegisterEmail" name="email" type="email" autocomplete="email" maxlength="255" required placeholder="you@example.com"></label>
+      <label class="field">Phone number<input id="customerRegisterPhone" name="phone" type="tel" autocomplete="tel" maxlength="20" required placeholder="09XXXXXXXXX"></label>
+      <label class="field">Password<input id="customerRegisterPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" required placeholder="At least 8 characters"></label>
+      <button class="primary full" id="customerRegisterSubmit">Create account</button>
+      <button class="textbutton full" id="showCustomerLogin" type="button">Already have an account? Log in</button>
+      <p id="customerRegisterError" class="error" role="alert"></p>
+    </form>
+  </dialog>
   <div id="toast" class="toast" role="status" hidden></div>
   <noscript><p class="loading-note">Please enable JavaScript to browse the menu and place an order.</p></noscript>
 </body>

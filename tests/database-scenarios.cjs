@@ -5,6 +5,13 @@ module.exports=async({tab,base,delay,runtimeErrors})=>{
  const sync=async p=>{await p.activate();await p.evaluate('Istilo.refresh(true)');};
  await customer.viewport(1440,1000);await customer.navigate(base+'/customer/');await customer.wait('document.querySelectorAll(".category").length===6');
  assert.match(await customer.evaluate('Istilo.business.address'),/Canlubang/);
+ await customer.click('#loginButton');
+ await customer.click('#showCustomerRegister');
+ await customer.fill('#customerRegisterEmail','newcustomer@example.com');
+ await customer.fill('#customerRegisterPhone','09171234567');
+ await customer.fill('#customerRegisterPassword','Browser-Test-Password!');
+ await submit(customer,'customerRegisterForm');
+ await customer.wait('Istilo.customer?.verified===true');
  await crew.viewport(1600,1000);await crew.navigate(base+'/crew/');await crew.wait('!!document.getElementById("loginForm")?.onsubmit');
  await crew.fill('#employee','CREW001');await crew.fill('#password','Browser-Test-Password!');await submit(crew,'loginForm');
  await crew.wait('!!document.querySelector(".ordering-station")');

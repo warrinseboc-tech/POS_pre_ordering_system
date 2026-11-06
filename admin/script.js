@@ -37,6 +37,8 @@ let staff = S.staff();
 
 let dashboardChart = null;
 let analyticsChart = null;
+let analyticsPieChart = null;
+let reportChart = null;
 
 async function save() {
   try { await S.write('expenses', expenses); return true; }
@@ -79,6 +81,12 @@ function totalSales() {
 
 function totalExpenses() {
   return expenses.reduce((sum,e) => sum + Number(e.amount || 0),0);
+}
+
+function crewName(order) {
+  const crewId = order.collectedBy || order.punchedBy || order.createdBy;
+  const member = staff.find(s => s.id === crewId);
+  return member ? `${member.name} (${member.employeeId})` : (crewId || "Not recorded");
 }
 
 // NAVIGATION
@@ -267,23 +275,26 @@ window.toggleProduct = async function(id) {
 // EXPENSES MANAGEMENT
 function renderExpenses() {
   const currentMonth = today().slice(0,7);
+  const selectedDate = $("expenseDateFilter").value;
+  const filtered = expenses.filter(e => !selectedDate || e.date === selectedDate);
 
   const monthly = expenses
     .filter(e => e.date.startsWith(currentMonth))
     .reduce((sum,e) => sum+Number(e.amount),0);
 
-  const largest = expenses.length
-    ? Math.max(...expenses.map(e => Number(e.amount)))
+  const selectedTotal = filtered.reduce((sum,e) => sum+Number(e.amount),0);
+  const largest = filtered.length
+    ? Math.max(...filtered.map(e => Number(e.amount)))
     : 0;
 
   summaryCards("expenseStats",[
-    ["Total Expenses",money(totalExpenses())],
+    [selectedDate ? "Expenses on Selected Date" : "Total Expenses",money(selectedDate ? selectedTotal : totalExpenses())],
     ["This Month",money(monthly)],
-    ["Expense Records",expenses.length],
+    ["Expense Records",filtered.length],
     ["Largest Expense",money(largest)]
   ]);
 
-  const sorted = [...expenses].sort((a,b) =>
+  const sorted = [...filtered].sort((a,b) =>
     b.date.localeCompare(a.date)
   );
 
@@ -305,6 +316,33 @@ function renderExpenses() {
   );
 }
 
+$("expenseDateFilter").addEventListener("change", renderExpenses);
+$("clearExpenseDateFilter").addEventListener("click", () => {
+  $("expenseDateFilter").value = "";
+  renderExpenses();
+});
+$("exportExpenseReportBtn").addEventListener("click", () => {
+  const selectedDate = $("expenseDateFilter").value;
+  const filtered = expenses
+    .filter(e => !selectedDate || e.date === selectedDate)
+    .sort((a,b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
+  const escapeCell = value => escapeHTML(String(value ?? ""));
+  const html = [
+    "<html xmlns:o=\"urn:schemas-microsoft-com:office:office\" xmlns:x=\"urn:schemas-microsoft-com:office:excel\"><head><meta charset=\"UTF-8\"><style>td,th{border:1px solid #777;padding:6px}th{background:#ddd}</style></head><body><table>",
+    "<tr><th>Expense</th><th>Category</th><th>Amount</th><th>Date</th><th>Description</th></tr>",
+    ...filtered.map(e => `<tr><td>${escapeCell(e.name)}</td><td>${escapeCell(e.category)}</td><td>${escapeCell(Number(e.amount).toFixed(2))}</td><td>${escapeCell(e.date)}</td><td>${escapeCell(e.description || "")}</td></tr>`),
+    "</table></body></html>"
+  ].join("");
+  const blob = new Blob(["\uFEFF",html], {type:"application/vnd.ms-excel;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = selectedDate ? `ISTILO-Expenses-${selectedDate}.xls` : "ISTILO-All-Expenses.xls";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url),1000);
+});
 $("addExpenseBtn").addEventListener("click", () => {
   $("expenseForm").reset();
   $("editExpenseId").value = "";
@@ -411,7 +449,7 @@ function renderAnalytics() {
   transactions.forEach(t => {
     (t.items || []).forEach(item => {
       const name = item.name || "Unknown Product";
-      sold[name] = (sold[name] || 0)+Number(item.quantity || 0);
+      sold[name] = (sold[name] || 0)+Number(item.qty ?? item.quantity ?? 0);
     });
   });
 
@@ -453,62 +491,122 @@ function renderAnalytics() {
       scales:{y:{beginAtZero:true}}
     }
   });
+
+  if (analyticsPieChart) analyticsPieChart.destroy();
+  if (typeof Chart === 'function') {
+    analyticsPieChart = new Chart($("analyticsPieChart"),{
+      type:"pie",
+      data:{
+        labels:ranked.map(([name]) => name),
+        datasets:[{
+          data:ranked.map(([,quantity]) => quantity),
+          backgroundColor:["#c68b59","#8f5d42","#d6ad7e","#6d8064","#a9b5a5","#7b5c4b","#e0c2a1","#5d4035"]
+        }]
+      },
+      options:{
+        responsive:true,
+        maintainAspectRatio:false,
+        plugins:{legend:{position:"right"}}
+      }
+    });
+  }
 }
 
 // REPORTS
 function renderReports() {
-  const rows = [
-    ...transactions.map(t => ({
-      type:"Sale",
-      name:t.id,
-      date:t.date,
-      amount:Number(t.total)
-    })),
-    ...expenses.map(e => ({
-      type:"Expense",
-      name:e.name,
-      date:e.date,
-      amount:Number(e.amount)
-    }))
-  ];
+  const crewFilter = $("reportCrewFilter");
+  if (crewFilter.options.length === 1) {
+    staff.forEach(member => {
+      const option = document.createElement("option");
+      option.value = member.id;
+      option.textContent = `${member.name} (${member.employeeId})`;
+      crewFilter.appendChild(option);
+    });
+  }
+
+  const selectedCrew = crewFilter.value;
+  const selectedDate = $("reportDateFilter").value;
+  const sales = transactions.filter(t => {
+    const id = t.collectedBy || t.punchedBy || t.createdBy;
+    const dateMatches = !selectedDate || S.today(t.date) === selectedDate;
+    const crewMatches = !selectedCrew || id === selectedCrew;
+    return dateMatches && crewMatches;
+  });
+
+  const rows = sales.map(t => ({
+    type:"Sale",
+    name:t.id,
+    date:t.date,
+    amount:Number(t.total),
+    crew:crewName(t)
+  }));
 
   $("reportsTable").innerHTML = createTable(
-    ["Type","Reference","Date","Amount"],
+    ["Type","Reference","Date","Amount","Crew Member"],
     rows.map(r => `
       <tr>
         <td>${escapeHTML(r.type)}</td>
         <td>${escapeHTML(r.name)}</td>
         <td>${escapeHTML(r.date)}</td>
         <td>${money(r.amount)}</td>
+        <td>${escapeHTML(r.crew)}</td>
       </tr>
     `)
   );
+
+  const totals = {};
+  sales.forEach(t => {
+    const name = crewName(t);
+    totals[name] = (totals[name] || 0) + Number(t.total || 0);
+  });
+  const labels = Object.keys(totals);
+  const values = Object.values(totals);
+
+  if (reportChart) reportChart.destroy();
+  if (typeof Chart === "function") {
+    reportChart = new Chart($("reportChart"),{
+      type:"bar",
+      data:{labels,datasets:[{label:"Sales total",data:values,backgroundColor:"#c68b59"}]},
+      options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}}}
+    });
+  } else {
+    chartFallback("reportChart", labels.map((label,i) => [label,money(values[i])]));
+  }
 }
 
+$("reportDateFilter").addEventListener("change", renderReports);
+$("reportCrewFilter").addEventListener("change", renderReports);
+$("clearReportFilters").addEventListener("click", () => {
+  $("reportDateFilter").value = "";
+  $("reportCrewFilter").value = "";
+  renderReports();
+});
+
 $("exportBtn").addEventListener("click", () => {
+  const selectedCrew = $("reportCrewFilter").value;
+  const selectedDate = $("reportDateFilter").value;
+  const sales = transactions.filter(t => {
+    const id = t.collectedBy || t.punchedBy || t.createdBy;
+    return (!selectedCrew || id === selectedCrew) &&
+      (!selectedDate || S.today(t.date) === selectedDate);
+  });
   const rows = [
-    ["Type","Reference","Date","Amount"],
-    ...transactions.map(t => ["Sale",t.id,t.date,t.total]),
-    ...expenses.map(e => ["Expense",e.name,e.date,e.amount])
+    ["Type","Reference","Date","Amount","Crew Member"],
+    ...sales.map(t => ["Sale",t.id,t.date,t.total,crewName(t)])
   ];
 
   const csv = rows.map(row => row.map(value => {
-    // Prevent spreadsheet applications interpreting text as formulas.
     let cell = String(value ?? "");
     if (/^[\s]*[=+\-@]/.test(cell)) cell = "'" + cell;
     return `"${cell.replace(/"/g,'""')}"`;
   }).join(",")).join("\r\n");
 
-  const blob = new Blob(["\uFEFF",csv],{
-    type:"text/csv;charset=utf-8"
-  });
-
+  const blob = new Blob(["\uFEFF",csv], {type:"text/csv;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = "ISTILO-Financial-Report.csv";
   link.click();
-
   setTimeout(() => URL.revokeObjectURL(url),1000);
 });
 
@@ -584,6 +682,8 @@ function renderPaymentProofs() {
 
 $('adminLoginForm').onsubmit=async event=>{event.preventDefault();try{await S.login($('adminEmployee').value,$('adminPassword').value,'admin');$('adminPassword').value='';$('adminLoginError').textContent='';refresh();}catch(err){$('adminLoginError').textContent=err.message;}};
 $('adminLogout').onclick=()=>attempt(async()=>{await S.logout();document.querySelectorAll('dialog[open]').forEach(d=>d.close());refresh();});
+$('adminMenuToggle').onclick=()=>{const sidebar=$('adminSidebar');const open=sidebar.classList.toggle('open');$('adminMenuToggle').setAttribute('aria-expanded',String(open));};
+document.querySelectorAll('.sidebar .nav').forEach(button=>button.onclick=()=>{button.closest('.sidebar')?.classList.remove('open');$('adminMenuToggle').setAttribute('aria-expanded','false');});
 
 refresh();
 

@@ -2,6 +2,7 @@ import hashlib
 import io
 import re
 import warnings
+import qrcode
 from pathlib import Path
 
 from flask import Blueprint, abort, current_app, jsonify, request, send_file, session
@@ -12,6 +13,30 @@ from .db import execute, rows, transaction
 
 payments=Blueprint('payments',__name__)
 Image.MAX_IMAGE_PIXELS=12_000_000
+
+
+@payments.get('/wallets/<method>/qr')
+def wallet_qr(method):
+    if method == 'GCash':
+        name=current_app.config['GCASH_NAME']; number=current_app.config['GCASH_NUMBER']
+        qr_path=current_app.config.get('GCASH_QR_PATH','')
+    elif method == 'Maya':
+        name=current_app.config['MAYA_NAME']; number=current_app.config['MAYA_NUMBER']
+        qr_path=current_app.config.get('MAYA_QR_PATH','')
+    else:
+        abort(404)
+    if qr_path:
+        configured=Path(qr_path).expanduser()
+        if configured.is_file():
+            return send_file(configured,mimetype=f'image/{configured.suffix.lstrip(".").lower().replace("jpg","jpeg")}',download_name=f'{method.lower()}-qr{configured.suffix.lower()}',max_age=300)
+    payload=f'{method}|{name}|{number}'
+    image=qrcode.make(payload).convert('RGB')
+    output=io.BytesIO()
+    image.save(output,'PNG',optimize=True)
+    output.seek(0)
+    response=send_file(output,mimetype='image/png',download_name=f'{method.lower()}-qr.png',max_age=300)
+    response.headers['Cache-Control']='public, max-age=300'
+    return response
 
 
 @payments.post('/orders/<order_id>/proof')
@@ -34,8 +59,7 @@ def upload_proof(order_id):
             output=io.BytesIO(); clean.save(output,'JPEG',quality=90)
     except (UnidentifiedImageError,ValueError,OSError,Image.DecompressionBombError,Image.DecompressionBombWarning):
         abort(400,description='Upload a readable PNG, JPEG, or WebP image, at least 100×100 pixels and no more than 12 megapixels.')
-    reference=text(request.form.get('reference',''),80,True).upper()
-    if not re.fullmatch(r'[A-Z0-9-]{8,80}',reference): abort(400,description='Enter the full GCash/Maya transaction reference (8–80 letters or digits).')
+    reference=text(request.form.get('reference',''),80,False).upper()
     amount=cents(request.form.get('amount'),True)
     proof_id=uid('PROOF'); filename=proof_id+'.jpg'
     target=Path(current_app.config['UPLOAD_FOLDER'])/filename
@@ -45,6 +69,11 @@ def upload_proof(order_id):
             own_order(order)
             if order['source']!='Customer' or order['status']!='Pending' or order['payment_status'] not in ('Awaiting proof','Rejected'):
                 abort(409,description='This order already has a pending/approved payment or is no longer active.')
+            if not reference:
+                reference=re.sub(r'[^A-Z0-9-]','-',order_id.upper())
+                if len(reference)<8:
+                    reference='ORDER-'+reference
+            if not re.fullmatch(r'[A-Z0-9-]{8,80}',reference): abort(400,description='Enter a valid GCash/Maya transaction reference.')
             if amount!=order['total_cents']: abort(400,description='The transferred amount must match the order total.')
             if rows('SELECT COUNT(*) AS count FROM payment_proofs WHERE order_id=%s',(order_id,),one=True)['count']>=5:
                 abort(429,description='Too many rejected submissions. Contact the shop.')

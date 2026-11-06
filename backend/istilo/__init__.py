@@ -36,6 +36,7 @@ def create_app(overrides=None):
         SESSION_COOKIE_SECURE=os.getenv('COOKIE_SECURE', 'false').lower() == 'true',
         GCASH_NAME=os.getenv('GCASH_NAME', 'Jayson Malinao'), GCASH_NUMBER=os.getenv('GCASH_NUMBER', '09196281147'),
         MAYA_NAME=os.getenv('MAYA_NAME', 'Warrin Seboc'), MAYA_NUMBER=os.getenv('MAYA_NUMBER', '09196281147'),
+        GCASH_QR_PATH=os.getenv('GCASH_QR_PATH', ''), MAYA_QR_PATH=os.getenv('MAYA_QR_PATH', ''),
     )
     if overrides:
         app.config.update(overrides)

@@ -2,7 +2,7 @@ import json
 import re
 from datetime import date
 
-from flask import Blueprint, abort, current_app, jsonify, session
+from flask import Blueprint, abort, current_app, jsonify, request, session
 from werkzeug.security import generate_password_hash
 
 from .auth import user_json
@@ -26,7 +26,8 @@ def order_json(o):
     return dict(id=o['id'], customer=o['customer'], phone=o['phone'], notes=o['notes'], source=o['source'], type=o['order_type'],
                 status=o['status'], payment=o['payment_method'], paymentStatus=o['payment_status'], total=o['total_cents']/100,
                 paid=o['cash_received_cents']/100, change=o['change_cents']/100, time=iso(o['created_at']), updatedAt=iso(o['updated_at']),
-                collectedAt=iso(o['collected_at']), punchedAt=iso(o['punched_at']), punchedBy=o['punched_by'], releasedAt=iso(o['released_at']),
+                createdBy=o['created_by'], collectedBy=o['collected_by'], collectedAt=iso(o['collected_at']),
+                punchedAt=iso(o['punched_at']), punchedBy=o['punched_by'], releasedAt=iso(o['released_at']),
                 proof=dict(id=proof['id'], status=proof['status'], note=proof['review_note']) if proof else None,
                 items=[dict(id=i['product_id'],name=i['name'],size=i['size'],flavor=i['flavor'],qty=i['quantity'],price=i['unit_price_cents']/100) for i in items])
 
@@ -43,6 +44,13 @@ def visible_orders(user):
 @api.get('/state')
 def state():
     user = actor()
+    customer = None
+    if request.headers.get('X-Portal') == 'customer' and session.get('customer_id') and session.get('customer_verified'):
+        customer_row = rows('SELECT * FROM accounts WHERE user_id=%s AND email_verified=1',
+                            (session['customer_id'],), one=True)
+        if customer_row:
+            customer = dict(id=customer_row['user_id'], email=customer_row['user_email'],
+                            phone=customer_row['phone'], verified=True)
     products = [product_json(p) for p in rows('SELECT * FROM products ORDER BY category,name')]
     staff = rows('SELECT * FROM users WHERE role=\'crew\' ORDER BY employee_id') if user and user['role'] == 'admin' else ([user] if user else [])
     proofs = []
@@ -56,7 +64,7 @@ def state():
         shifts = [dict(id=s['id'],employee=user['employee_id'],start=iso(s['start_at']),end=iso(s['end_at']),note=s['note']) for s in rows('SELECT * FROM shifts WHERE employee_id=%s ORDER BY start_at', (user['id'],))]
         if user['role'] == 'admin':
             expenses = [dict(id=x['id'],name=x['name'],category=x['category'],amount=x['amount_cents']/100,date=str(x['expense_date']),description=x['description']) for x in rows('SELECT * FROM expenses ORDER BY expense_date')]
-    return jsonify(csrf=session['csrf'], user=user_json(user), onShift=bool(active_shift(user)), products=products, orders=[order_json(o) for o in visible_orders(user)],
+    return jsonify(csrf=session['csrf'], user=user_json(user), customer=customer, onShift=bool(active_shift(user)), products=products, orders=[order_json(o) for o in visible_orders(user)],
                    availability={p['id']:p['available'] for p in products}, staff=[user_json(s) for s in staff],
                    inquiries=inquiries, expenses=expenses, shifts=shifts, proofs=proofs,
                    profiles={user['employee_id']:dict(name=user['name'],email=user['email'])} if user else {},
@@ -85,7 +93,7 @@ def save_product():
         abort(400, description='Provide between one and twenty flavors.')
     flavors = list(dict.fromkeys(text(f,100,True) for f in flavors))
     extra = cents(data.get('largeExtra',20))
-    sizes = [dict(name='Regular',extra_cents=0)] if category=='Snacks' else [dict(name='Medium',extra_cents=0),dict(name='Large',extra_cents=extra)]
+    sizes = [dict(name='Regular',extra_cents=0)] if category=='Snacks' else [dict(name='Hot',extra_cents=0),dict(name='Ice',extra_cents=0)]
     product_id = data.get('id') or uid('P')
     with transaction():
         if data.get('id') and not rows('SELECT id FROM products WHERE id=%s FOR UPDATE',(product_id,),one=True):
@@ -117,7 +125,8 @@ def validated_items(items, existing=()):
         if not p or not p['available']: abort(409,description='A selected product is no longer available.')
         qty = item.get('qty')
         if isinstance(qty,bool) or not isinstance(qty,int) or not 1 <= qty <= 99: abort(400,description='Quantity must be 1–99.')
-        size = next((s for s in json.loads(p['sizes']) if s['name']==item.get('size')),None)
+        selected_type = item.get('size')
+        size = {'name': selected_type, 'extra_cents': 0} if selected_type in ('Hot','Ice') or (p['category']=='Snacks' and selected_type=='Regular') else next((s for s in json.loads(p['sizes']) if s['name']==selected_type),None)
         if not size or item.get('flavor') not in json.loads(p['flavors']): abort(400,description='Choose valid product options.')
         unit = historical.get((p['id'],size['name'],item['flavor']), p['price_cents'] + size['extra_cents'])
         if 'price' not in item or cents(item['price']) != unit: abort(409,description='The menu price changed. Review your cart and try again.')
@@ -134,6 +143,8 @@ def create_order():
     source = data.get('source','Customer')
     if source not in ('Customer','Counter'): abort(400)
     if source=='Counter' and (not user or user['role'] not in ('crew','admin')): abort(403)
+    if source=='Customer' and (not session.get('customer_id') or not session.get('customer_verified')):
+        abort(401, description='Sign in with a verified customer account before placing an order.')
     method = data.get('payment')
     if method not in (('GCash','Maya') if source=='Customer' else ('Cash','Pay at counter')):
         abort(400,description='Online orders require GCash or Maya payment with proof.')

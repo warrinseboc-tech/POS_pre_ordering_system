@@ -5,9 +5,26 @@
   let category = null, search = '', cart = [], receipt = null;
   const checkoutDraft = { customer: '', phone: '', notes: '', payment: 'GCash', reviewed: false };
   const pick = U.picker(cart, render);
+  const loginDialog = document.getElementById('customerLoginDialog');
+  function requireCustomer() {
+    if (S.customer?.verified) return true;
+    showCustomerLogin();
+    loginDialog.showModal();
+    document.getElementById('customerIdentifier').focus();
+    return false;
+  }
+  function showCustomerLogin() {
+    document.getElementById('customerLoginForm').hidden = false;
+    document.getElementById('customerRegisterForm').hidden = true;
+  }
+  function updateLoginButton() {
+    const button = document.getElementById('loginButton');
+    if (!button) return;
+    button.textContent = S.customer?.verified ? 'Log out' : 'Log in';
+  }
   const placeholder = text => `<span class="blank-value">${e(text)}</span>`;
   const detail = (value, text) => value ? e(value) : placeholder(text);
-  const page = () => ['menu', 'about', 'contact', 'checkout', 'confirmation'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'menu';
+  const page = () => ['menu', 'about', 'contact', 'checkout', 'confirmation', 'tracking'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'menu';
   function navigate(name) { if (page() === name) render(); else location.hash = name; }
   const steps = active => `<div class="steps">${['Menu', 'Order summary', 'Checkout'].map((s, i) => `<span class="${i === active ? 'active' : ''}">${String(i + 1).padStart(2, '0')} &nbsp; ${s}</span>`).join('<span>→</span>')}</div>`;
   function sidebar() {
@@ -26,6 +43,11 @@
     if(!order)return '<section class="checkout-layout"><h1>No order to show.</h1><button class="primary" data-navigate="menu">Back to menu</button></section>';
     return `<section class="checkout-layout"><span class="eyebrow">Order ${U.shortId(order.id)}</span><h1>${S.isPaid(order)?'Your payment is verified.':'Your pickup order'}</h1><p class="page-intro">${e(order.customer)} · ${S.date(order.time)} · ${U.badge(order.status)}</p><div class="grid two">${IstiloPayments.panel(order)}<div class="card"><h3>Order summary</h3>${U.cartHTML(order.items,false)}<div class="summary-total"><span>Total</span><strong>${S.money(order.total)}</strong></div><p>Pickup: ${e(S.business.address)}</p><p class="mini-note">The crew manually accepts orders after successful payment verification.</p></div></div><button class="outline" data-navigate="menu" style="margin-top:22px">Back to menu</button></section>`;
   }
+  function tracking() {
+    const ownOrders=S.read('orders',[]).filter(o=>o.source==='Customer').slice().reverse();
+    if(!ownOrders.length)return '<section class="checkout-layout"><span class="eyebrow">Order tracking</span><h1>No orders to track.</h1><p class="page-intro">Your connected database orders will appear here.</p><button class="primary" data-navigate="menu">Order from the menu</button></section>';
+    return `<section class="checkout-layout"><span class="eyebrow">Live order tracking</span><h1>Track your order</h1><p class="page-intro">Status updates are synchronized with the database and crew portal.</p><div class="tracking-list">${ownOrders.map(order=>`<article class="card tracking-card"><div class="row between wrap"><div><small>Order ${U.shortId(order.id)}</small><h3>${e(order.customer)}</h3></div>${U.badge(order.status)}</div><p>${order.items.map(i=>`${i.qty} × ${e(i.name)}`).join(', ')}</p><div class="tracking-progress" role="list" aria-label="Order progress">${['Pending','Preparing','Ready','Completed'].map((status,index)=>{const step=['Pending','Preparing','Ready','Completed'].indexOf(order.status);return `<span class="${index<=step?'active':''} ${status==='Cancelled'?'': ''}" role="listitem">${status}</span>`}).join('')} </div><div class="row between wrap"><strong>${S.money(order.total)}</strong><small>${order.paymentStatus} · ${e(order.payment)}</small></div>${order.status==='Cancelled'?'<p class="error">This order was cancelled.</p>':''}</article>`).join('')}</div></section>`;
+  }
   function about() {
     const b = S.business;
     return `<section class="info-page"><span class="eyebrow">More than a cup</span><h1>A place for your everyday pause.</h1><p class="page-intro">Get to know ISTILO — the place, the people, and the story behind your cup.</p><div class="story-banner"><div><span class="eyebrow">Our story</span><h2>${e(b.tagline)}</h2><p>${e(b.story)}</p><p>Choose a favorite from our coffee, milk tea, frappe, latte, matcha, and snack menu.</p></div><div class="place-visual"><div>☕<small>Shop photo to be added</small></div></div></div><div class="grid facts"><div class="card fact"><small>Our place</small><h3>Visit ISTILO</h3><p>${detail(b.address, 'Shop location to be added')}</p><p>${detail(b.hours, 'Opening hours to be added')}</p></div><div class="card fact"><small>The beginning</small><h3>Our foundation</h3><p>${detail(b.founded, 'Founding date to be added')}</p></div><div class="card fact"><small>Behind the counter</small><h3>Our owner</h3><p>${detail(b.owner, 'Owner’s name and story to be added')}</p></div></div><div class="section-head"><div><span class="eyebrow">The people who make your day</span><h2>Meet the crew</h2></div></div><div class="people-grid">${b.crew.length ? b.crew.map(p => `<article class="card"><div class="person-icon" aria-hidden="true">☕</div><h3>${e(p.name)}</h3><p class="muted">${e(p.role)}</p></article>`).join('') : '<article class="card"><div class="person-icon" aria-hidden="true">☕</div><h3>Our crew</h3><p class="muted">Crew names, roles, and photos will be added here.</p></article>'}</div><div class="card" style="margin-top:26px"><span class="eyebrow">Our tagline</span><h2 style="margin-top:12px">“${e(b.tagline)}”</h2></div></section>`;
@@ -43,19 +65,33 @@
     }
     S.syncCart(cart);
     const current = page();
-    root.innerHTML = ({ menu, checkout: menu, confirmation, about, contact })[current]();
-    document.querySelectorAll('[data-nav]').forEach(a => { const active = a.dataset.nav === (['checkout', 'confirmation'].includes(current) ? 'menu' : current); a.classList.toggle('active', active); if (active) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-    document.getElementById('cartCount').textContent = cart.reduce((n, i) => n + i.qty, 0);
+    if (current === 'checkout' && !S.customer?.verified) {
+      navigate('menu');
+      showCustomerLogin();
+      loginDialog.showModal();
+      return;
+    }
+    root.innerHTML = ({ menu, checkout: menu, confirmation, tracking, about, contact })[current]();
+    document.querySelectorAll('[data-nav]').forEach(a => { const active = a.dataset.nav === (['checkout', 'confirmation'].includes(current) ? 'menu' : current === 'tracking' ? 'tracking' : current); a.classList.toggle('active', active); if (active) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     root.querySelectorAll('[data-category]').forEach(b => b.onclick = () => { category = b.dataset.category; search = ''; render(); });
-    root.querySelectorAll('[data-product]').forEach(b => b.onclick = () => pick(b.dataset.product));
+    root.querySelectorAll('[data-product]').forEach(b => b.onclick = () => { if (requireCustomer()) pick(b.dataset.product); });
     root.querySelectorAll('[data-navigate]').forEach(b => b.onclick = () => navigate(b.dataset.navigate));
     U.bindCart(root, cart, render);
     const back = document.getElementById('backCategories');
     if (back) back.onclick = () => { category = null; search = ''; render(); };
     const clear = document.getElementById('clearCart');
-    if (clear) clear.onclick = () => { cart.splice(0); render(); };
+    if (clear) clear.onclick = () => {
+      if (!window.confirm('Clear every item from your current order?')) return;
+      cart.splice(0);
+      render();
+    };
     const next = document.getElementById('toCheckout');
-    if (next) next.onclick = () => { navigate('checkout'); setTimeout(() => document.getElementById('checkoutForm')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60); };
+    if (next) next.onclick = () => {
+      if (!requireCustomer()) return;
+      if (!window.confirm('Review your items, options, quantity, and total before proceeding to checkout?')) return;
+      navigate('checkout');
+      setTimeout(() => document.getElementById('checkoutForm')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+    };
     const searchBox = document.getElementById('productSearch');
     if (searchBox) searchBox.oninput = event => { search = event.target.value; const position = event.target.selectionStart; render(); const input = document.getElementById('productSearch'); input.focus(); input.setSelectionRange(position, position); };
     IstiloPayments.bind(root, render);
@@ -66,9 +102,11 @@
     }
     if (form) form.onsubmit = async event => {
       event.preventDefault();
+      if (!requireCustomer()) return;
       const values = new FormData(form);
       const name = values.get('customer').trim();
       if (!name) { document.getElementById('checkoutError').textContent = 'Please enter your name.'; return; }
+      if (!window.confirm('Please confirm that you reviewed your items, options, quantity, payment method, and total before placing this order.')) return;
       try {
         receipt = await S.addOrder(cart, { customer: name, phone: values.get('phone').trim(), notes: values.get('notes').trim(), payment: values.get('payment'), source: 'Customer', type: 'Pickup' });
         cart.splice(0);
@@ -84,7 +122,74 @@
       try { await S.write('inquiries', [...S.read('inquiries', []), message]); contactForm.reset(); document.getElementById('contactStatus').textContent = 'Your message was received by the shop.'; } catch (err) { U.toast(err.message); }
     };
   }
-  document.getElementById('cartButton').onclick = () => { if (page() !== 'menu') navigate('menu'); setTimeout(() => document.getElementById('orderSummary')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); };
+  document.getElementById('customerMenuToggle').onclick = () => {
+    const nav=document.getElementById('customerNav');
+    const open=nav.classList.toggle('open');
+    document.getElementById('customerMenuToggle').setAttribute('aria-expanded',String(open));
+  };
+  document.querySelectorAll('#customerNav a').forEach(link=>link.onclick=()=>{document.getElementById('customerNav').classList.remove('open');document.getElementById('customerMenuToggle').setAttribute('aria-expanded','false');});
+  document.getElementById('closeCustomerLogin').onclick = () => loginDialog.close();
+  document.getElementById('closeCustomerRegister').onclick = () => loginDialog.close();
+  document.getElementById('showCustomerRegister').onclick = () => {
+    document.getElementById('customerLoginForm').hidden = true;
+    document.getElementById('customerRegisterForm').hidden = false;
+    document.getElementById('customerRegisterEmail').focus();
+  };
+  document.getElementById('showCustomerLogin').onclick = () => {
+    document.getElementById('customerRegisterForm').hidden = true;
+    document.getElementById('customerLoginForm').hidden = false;
+    document.getElementById('customerIdentifier').focus();
+  };
+  document.getElementById('loginButton').onclick = async () => {
+    if (S.customer?.verified) {
+      if (!window.confirm('Are you sure you want to log out?')) return;
+      await S.logout();
+      await S.refresh(true);
+      updateLoginButton();
+      U.toast('You have been logged out.');
+      render();
+      return;
+    }
+    document.getElementById('customerLoginError').textContent = '';
+    showCustomerLogin();
+    loginDialog.showModal();
+    document.getElementById('customerIdentifier').focus();
+  };
+  document.getElementById('customerLoginForm').onsubmit = async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    document.getElementById('customerLoginError').textContent = '';
+    try {
+      await S.customerLogin(values.get('identifier').trim(), values.get('password'));
+      await S.refresh(true);
+      updateLoginButton();
+      loginDialog.close();
+      form.reset();
+      U.toast('Login successful. You can now place an order.');
+      render();
+    } catch (err) {
+      document.getElementById('customerLoginError').textContent = err.message;
+    }
+  };
+  document.getElementById('customerRegisterForm').onsubmit = async event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    document.getElementById('customerRegisterError').textContent = '';
+    try {
+      await S.customerRegister(values.get('email').trim(), values.get('phone').trim(), values.get('password'));
+      await S.refresh(true);
+      updateLoginButton();
+      loginDialog.close();
+      form.reset();
+      U.toast('Account created. You can now place an order.');
+      render();
+    } catch (err) {
+      document.getElementById('customerRegisterError').textContent = err.message;
+    }
+  };
   window.addEventListener('hashchange', () => { render(); root.focus(); window.scrollTo(0, 0); });
   window.addEventListener('storage', event => {
     if (!Object.values(S.keys).includes(event.key)) return;
@@ -92,5 +197,6 @@
     if (['menu', 'confirmation'].includes(page())) render();
     else if (event.key === S.keys.availability) U.toast('Menu availability changed. Your cart will be checked at checkout.');
   });
+  updateLoginButton();
   render();
 })();
