@@ -26,9 +26,11 @@
     <button class="nav active" data-page="dashboard">▦ Dashboard</button>
     <button class="nav" data-page="orders">☷ Pre-Orders</button>
     <button class="nav" data-page="products">☕ Product Management</button>
+    <button class="nav" data-page="inventory">▦ Inventory</button>
     <button class="nav" data-page="expenses">₱ Expenses Management</button>
     <button class="nav" data-page="analytics">▥ Sales Analytics</button>
     <button class="nav" data-page="reports">▧ Sales Reports</button>
+    <button class="nav" data-page="inquiries">✉ Customer Inquiries</button>
     <button class="nav" data-page="staff">♙ Staff Management</button>
   </nav>
 
@@ -85,6 +87,22 @@
     </div>
   </section>
 
+  <!-- INVENTORY -->
+  <section id="inventory" class="page">
+    <div class="stats" id="inventoryStats"></div>
+    <div class="panel">
+      <div class="section-heading">
+        <h2>Inventory</h2>
+        <button class="primary" id="addInventoryBtn">+ Add Ingredient</button>
+      </div>
+      <div id="inventoryTable"></div>
+    </div>
+    <div class="panel">
+      <h2>Recent Stock Adjustments</h2>
+      <div id="inventoryHistory"></div>
+    </div>
+  </section>
+
   <!-- EXPENSES -->
   <section id="expenses" class="page">
     <div class="stats" id="expenseStats"></div>
@@ -112,6 +130,20 @@
 
     <div class="panel">
       <h2>Sales Analytics</h2>
+      <div class="report-controls analytics-filter-controls">
+        <label for="analyticsProductFilter">Purchased product
+          <select id="analyticsProductFilter">
+            <option value="">All products</option>
+          </select>
+        </label>
+        <label for="analyticsStartDate">Start date
+          <input type="date" id="analyticsStartDate">
+        </label>
+        <label for="analyticsEndDate">End date
+          <input type="date" id="analyticsEndDate">
+        </label>
+        <button type="button" class="secondary" id="clearAnalyticsFilters">Clear filters</button>
+      </div>
       <div class="analytics-charts">
         <div class="chart-wrap"><canvas id="analyticsChart"></canvas></div>
         <div class="chart-wrap"><canvas id="analyticsPieChart"></canvas></div>
@@ -142,12 +174,26 @@
     </div>
   </section>
 
+  <!-- CUSTOMER INQUIRIES -->
+  <section id="inquiries" class="page">
+    <div class="panel">
+      <div class="section-heading">
+        <h2>Customer Inquiries</h2>
+      </div>
+      <p class="help-text">Review customer messages and add an internal note or update the inquiry status.</p>
+      <div id="inquiriesTable"></div>
+    </div>
+  </section>
+
   <!-- STAFF -->
   <section id="staff" class="page">
     <div class="panel">
       <div class="section-heading">
         <h2>Staff Management</h2>
-        <button class="primary" id="addStaffBtn">+ Create crew account</button>
+        <div class="row">
+          <button class="secondary" id="addAdminBtn">+ Create admin account</button>
+          <button class="primary" id="addStaffBtn">+ Create crew account</button>
+        </div>
       </div>
       <p class="help-text">Create an active crew login with an employee ID and initial password. Crew can verify customer payments and manage preparation in the crew workspace.</p><div id="staffTable"></div>
     </div>
@@ -161,24 +207,38 @@
     <h2 id="productFormTitle">Add Product</h2>
     <input type="hidden" id="editProductId">
 
-    <label>Product Name</label>
-    <input id="productName" required maxlength="100">
+    <label for="productImage">Choose File</label>
+    <input id="productImage" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+    <div id="productImagePreview" class="product-image-preview" aria-live="polite">No image selected</div>
+    <div class="image-adjustments" id="productImageAdjustments">
+      <label for="productImageScale">Zoom <span id="productImageScaleValue">100%</span></label>
+      <input id="productImageScale" type="range" min="100" max="250" step="5" value="100">
+      <button type="button" class="secondary" id="resetProductImage">Reset Crop</button>
+    </div>
 
-    <label>Category</label>
-    <select id="productCategory">
-      <option>Coffee</option>
-      <option>Milk Tea</option>
-      <option>Frappe</option>
-      <option>Latte</option>
-      <option>Matcha</option>
-      <option>Snacks</option>
-    </select>
-
-    <label>Description</label>
-    <textarea id="productDescription" rows="3"></textarea>
+    <div class="product-form-grid">
+      <div>
+        <label>Category</label>
+        <select id="productCategory">
+          <option>Coffee</option>
+          <option>Milk Tea</option>
+          <option>Frappe</option>
+          <option>Latte</option>
+          <option>Matcha</option>
+          <option>Snacks</option>
+        </select>
+      </div>
+      <div>
+        <label>Product Name</label>
+        <input id="productName" required maxlength="100">
+      </div>
+    </div>
 
     <label>Price (₱)</label>
     <input id="productPrice" type="number" min="0.01" step="0.01" required>
+
+    <label>Description</label>
+    <textarea id="productDescription" rows="3"></textarea>
 
     <label for="productFlavors">Flavors (separate with commas)</label>
     <input id="productFlavors" maxlength="300" required placeholder="Original, Vanilla">
@@ -201,11 +261,36 @@
 <dialog id="staffDialog" aria-labelledby="staffFormTitle">
   <form id="staffForm">
     <h2 id="staffFormTitle">Create crew account</h2>
+    <input type="hidden" id="staffRole" value="crew">
     <label for="staffName">Staff name</label><input id="staffName" maxlength="80" required>
     <label for="staffEmployeeId">Employee ID</label><input id="staffEmployeeId" maxlength="30" pattern="[A-Za-z0-9_-]+" placeholder="CREW002" required>
     <label for="staffPassword">Initial password (at least 12 characters)</label><input id="staffPassword" type="password" minlength="12" maxlength="200" autocomplete="new-password" required>
     <p class="help-text">Share the initial password privately with this crew member. Passwords are hashed in the database.</p>
     <div class="dialog-actions"><button type="button" class="secondary" id="cancelStaffBtn">Cancel</button><button class="primary">Save crew member</button></div>
+  </form>
+</dialog>
+
+<!-- INVENTORY MODALS -->
+<dialog id="inventoryDialog">
+  <form id="inventoryForm">
+    <h2 id="inventoryFormTitle">Add Ingredient</h2>
+    <input type="hidden" id="editInventoryId">
+    <label for="inventoryName">Ingredient name</label><input id="inventoryName" maxlength="100" required>
+    <label for="inventoryCategory">Type / category</label><input id="inventoryCategory" maxlength="60" value="Ingredients" required>
+    <label for="inventoryUnit">Unit of measurement</label><input id="inventoryUnit" maxlength="30" placeholder="kg, liters, pcs" required>
+    <label for="inventoryQuantity">Starting quantity</label><div class="number-stepper"><button type="button" data-step-target="inventoryQuantity" data-step="-1" aria-label="Decrease starting quantity">−</button><input id="inventoryQuantity" type="number" min="0" step="1" value="0" inputmode="numeric" required><button type="button" data-step-target="inventoryQuantity" data-step="1" aria-label="Increase starting quantity">+</button></div>
+    <label for="inventoryMinimum">Low-stock minimum</label><div class="number-stepper"><button type="button" data-step-target="inventoryMinimum" data-step="-1" aria-label="Decrease low-stock minimum">−</button><input id="inventoryMinimum" type="number" min="0" step="1" value="0" inputmode="numeric" required><button type="button" data-step-target="inventoryMinimum" data-step="1" aria-label="Increase low-stock minimum">+</button></div>
+    <div class="dialog-actions"><button type="button" class="secondary" id="cancelInventoryBtn">Cancel</button><button class="primary">Add Ingredient</button></div>
+  </form>
+</dialog>
+
+<dialog id="inventoryAdjustDialog">
+  <form id="inventoryAdjustForm">
+    <h2 id="inventoryAdjustTitle">Adjust Stock</h2>
+    <input type="hidden" id="inventoryAdjustId">
+    <label for="inventoryAdjustMode">Action</label><select id="inventoryAdjustMode"><option value="add">Add stock</option><option value="deduct">Deduct stock</option></select>
+    <label for="inventoryAdjustAmount">Number</label><div class="number-stepper"><button type="button" data-step-target="inventoryAdjustAmount" data-step="-1" aria-label="Decrease adjustment number">−</button><input id="inventoryAdjustAmount" type="number" min="1" step="1" value="1" inputmode="numeric" required><button type="button" data-step-target="inventoryAdjustAmount" data-step="1" aria-label="Increase adjustment number">+</button></div>
+    <div class="dialog-actions"><button type="button" class="secondary" id="cancelInventoryAdjustBtn">Cancel</button><button class="primary">Confirm Adjustment</button></div>
   </form>
 </dialog>
 

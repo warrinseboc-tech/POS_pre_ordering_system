@@ -10,8 +10,10 @@ module.exports=async({tab,base,delay,runtimeErrors})=>{
  await customer.fill('#customerRegisterEmail','newcustomer@example.com');
  await customer.fill('#customerRegisterPhone','09171234567');
  await customer.fill('#customerRegisterPassword','Browser-Test-Password!');
+ await customer.evaluate('document.getElementById("customerTerms").checked=true');
  await submit(customer,'customerRegisterForm');
  await customer.wait('Istilo.customer?.verified===true');
+ await customer.evaluate('Istilo.customerResetPassword("newcustomer@example.com","Reset-Test-Password!")');
  await crew.viewport(1600,1000);await crew.navigate(base+'/crew/');await crew.wait('!!document.getElementById("loginForm")?.onsubmit');
  await crew.fill('#employee','CREW001');await crew.fill('#password','Browser-Test-Password!');await submit(crew,'loginForm');
  await crew.wait('!!document.querySelector(".ordering-station")');

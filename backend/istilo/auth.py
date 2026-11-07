@@ -6,14 +6,23 @@ from datetime import timedelta
 from flask import Blueprint, abort, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from .common import actor, iso, now, payload, text
+from .common import payload, text, now
 from .db import execute, rows, transaction
 
 auth = Blueprint('auth', __name__)
 
 
+def valid_customer_password(password):
+    return (
+        len(password) >= 8
+        and re.search(r'[A-Za-z]', password)
+        and re.search(r'[0-9]', password)
+        and re.search(r'[^A-Za-z0-9\s]', password)
+    )
+
+
 def customer_json(account):
-    return dict(id=account['user_id'], email=account['user_email'], phone=account['phone'], verified=bool(account['email_verified'])) if account else None
+    return dict(id=account['user_id'], name=account.get('name', ''), email=account['user_email'], phone=account['phone'], verified=bool(account['email_verified'])) if account else None
 
 
 def user_json(user):
@@ -82,13 +91,18 @@ def customer_login():
 @auth.post('/auth/customer/register')
 def customer_register():
     data = request.get_json(silent=True) if request.is_json else request.form.to_dict()
+    name = text(data.get('name', ''), 100, True)
     email = text(data.get('email', ''), 255, True).lower()
     phone = text(data.get('phone', ''), 20, True)
     password = text(data.get('password', ''), 200, True)
+    if not name:
+        abort(400, description='Enter your name.')
     if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
         abort(400, description='Enter a valid email address.')
-    if len(password) < 8:
-        abort(400, description='Use a password with at least 8 characters.')
+    if not valid_customer_password(password):
+        abort(400, description='Password must be at least 8 characters and include a letter, number, and special character.')
+    if data.get('terms') is not True:
+        abort(400, description='You must agree to the Terms and Agreement.')
     if not re.fullmatch(r'[0-9+\-\s]{7,20}', phone):
         abort(400, description='Enter a valid phone number.')
     with transaction():
@@ -96,13 +110,56 @@ def customer_register():
                         (email, phone), one=True)
         if existing:
             abort(409, description='An account with that email or phone already exists.')
-        execute('INSERT INTO accounts(password,user_email,phone,email_verified) VALUES(%s,%s,%s,1)',
-                (generate_password_hash(password), email, phone))
+        execute('INSERT INTO accounts(password,name,user_email,phone,email_verified) VALUES(%s,%s,%s,%s,1)',
+                (generate_password_hash(password), name, email, phone))
         account = rows('SELECT * FROM accounts WHERE user_email=%s', (email,), one=True)
     session['customer_id'] = account['user_id']
     session['customer_email'] = account['user_email']
     session['customer_verified'] = True
     return jsonify(user=customer_json(account), csrf=session['csrf']), 201
+
+
+@auth.post('/auth/customer/reset-password')
+def customer_reset_password():
+    data = payload()
+    identifier = text(data.get('identifier', ''), 255, True).lower()
+    password = text(data.get('password', ''), 200, True)
+    if not valid_customer_password(password):
+        abort(400, description='Password must be at least 8 characters and include a letter, number, and special character.')
+    account = rows('SELECT user_id FROM accounts WHERE user_email=%s OR phone=%s LIMIT 1',
+                   (identifier, data.get('identifier', '').strip()), one=True)
+    if not account:
+        abort(404, description='No account matches that email or phone number.')
+    with transaction():
+        execute('UPDATE accounts SET password=%s WHERE user_id=%s',
+                (generate_password_hash(password), account['user_id']))
+    return jsonify(ok=True)
+
+
+@auth.patch('/auth/customer/profile')
+def customer_update_profile():
+    if not session.get('customer_id') or not session.get('customer_verified'):
+        abort(401, description='Sign in to edit your profile.')
+    data = payload()
+    name = text(data.get('name', ''), 100, True)
+    email = text(data.get('email', ''), 255, True).lower()
+    phone = text(data.get('phone', ''), 20, True)
+    if not name:
+        abort(400, description='Enter your name.')
+    if not re.fullmatch(r'[^@\s]+@[^@\s]+\.[^@\s]+', email):
+        abort(400, description='Enter a valid email address.')
+    if not re.fullmatch(r'[0-9+\-\s]{7,20}', phone):
+        abort(400, description='Enter a valid phone number.')
+    with transaction():
+        existing = rows('SELECT user_id FROM accounts WHERE (user_email=%s OR phone=%s) AND user_id<>%s LIMIT 1',
+                        (email, phone, session['customer_id']), one=True)
+        if existing:
+            abort(409, description='That email or phone is already used by another account.')
+        execute('UPDATE accounts SET name=%s,user_email=%s,phone=%s WHERE user_id=%s',
+                (name, email, phone, session['customer_id']))
+        account = rows('SELECT * FROM accounts WHERE user_id=%s', (session['customer_id'],), one=True)
+    session['customer_email'] = account['user_email']
+    return jsonify(user=customer_json(account))
 
 
 @auth.post('/auth/logout')

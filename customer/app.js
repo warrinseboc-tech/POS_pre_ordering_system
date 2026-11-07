@@ -6,6 +6,7 @@
   const checkoutDraft = { customer: '', phone: '', notes: '', payment: 'GCash', reviewed: false };
   const pick = U.picker(cart, render);
   const loginDialog = document.getElementById('customerLoginDialog');
+  const notificationsDialog = document.getElementById('customerNotificationsDialog');
   function requireCustomer() {
     if (S.customer?.verified) return true;
     showCustomerLogin();
@@ -16,22 +17,56 @@
   function showCustomerLogin() {
     document.getElementById('customerLoginForm').hidden = false;
     document.getElementById('customerRegisterForm').hidden = true;
+    document.getElementById('customerForgotForm').hidden = true;
   }
   function updateLoginButton() {
     const button = document.getElementById('loginButton');
     if (!button) return;
-    button.textContent = S.customer?.verified ? 'Log out' : 'Log in';
+    button.textContent = S.customer?.verified ? 'Profile' : 'Log in';
+    updateNotifications();
+  }
+  function orderNotifications() {
+    return S.read('orders', []).filter(order => order.source === 'Customer').slice().reverse().map(order => {
+      const proofStatus = order.proof?.status || '';
+      const key = `${order.id}:${proofStatus}:${order.paymentStatus}:${order.status}:${order.proof?.note || ''}`;
+      if (proofStatus === 'Rejected' || order.paymentStatus === 'Rejected') {
+        return { key, type: 'rejected', title: 'Payment proof rejected', message: order.proof?.note || 'Submit a corrected payment receipt.', time: order.updatedAt || order.time };
+      }
+      if (order.status === 'Cancelled') return { key, type: 'rejected', title: 'Order cancelled', message: 'Your pickup order was cancelled by the shop.', time: order.updatedAt || order.time };
+      if (S.isPaid(order)) {
+        const statusMessages = { Pending: 'Payment verified. Your order is pending crew acceptance.', Preparing: 'Your payment is verified and the crew is preparing your order.', Ready: 'Your order is ready for pickup.', Completed: 'Your order has been completed and collected.' };
+        return { key, type: 'process', title: `Order ${order.status}`, message: statusMessages[order.status] || 'Your pickup order is being processed.', time: order.updatedAt || order.time };
+      }
+      if (proofStatus === 'Under review' || order.paymentStatus === 'Under review') return { key, type: 'process', title: 'Payment proof under review', message: 'The crew is checking your payment receipt.', time: order.updatedAt || order.time };
+      if (order.status === 'Pending') return { key, type: 'process', title: 'Order submitted', message: 'Your pickup order is waiting for payment verification.', time: order.updatedAt || order.time };
+      return { key, type: 'process', title: `Order ${order.status}`, message: 'Your pickup order status was updated.', time: order.updatedAt || order.time };
+    });
+  }
+  function seenNotificationKeys() {
+    try { return JSON.parse(localStorage.getItem('istilo:seenCustomerNotifications') || '[]'); } catch { return []; }
+  }
+  function updateNotifications() {
+    const button = document.getElementById('notificationButton');
+    const badge = document.getElementById('notificationBadge');
+    if (!button || !badge) return;
+    const verified = !!S.customer?.verified;
+    button.hidden = !verified;
+    if (!verified) return;
+    const seen = new Set(seenNotificationKeys());
+    const unread = orderNotifications().filter(item => !seen.has(item.key)).length;
+    badge.textContent = unread > 9 ? '9+' : String(unread);
+    badge.hidden = unread === 0;
   }
   const placeholder = text => `<span class="blank-value">${e(text)}</span>`;
   const detail = (value, text) => value ? e(value) : placeholder(text);
-  const page = () => ['menu', 'about', 'contact', 'checkout', 'confirmation', 'tracking'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'menu';
+  const page = () => ['menu', 'about', 'contact', 'checkout', 'confirmation', 'tracking', 'profile'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'menu';
   function navigate(name) { if (page() === name) render(); else location.hash = name; }
   const steps = active => `<div class="steps">${['Menu', 'Order summary', 'Checkout'].map((s, i) => `<span class="${i === active ? 'active' : ''}">${String(i + 1).padStart(2, '0')} &nbsp; ${s}</span>`).join('<span>→</span>')}</div>`;
   function sidebar() {
     return `<aside class="order-sidebar" id="orderSummary"><div class="card"><div class="sidebar-label"><h3>Your order</h3><span>${cart.reduce((n, i) => n + i.qty, 0)} items</span></div>${U.cartHTML(cart)}<div class="summary-total"><span>Subtotal</span><strong>${S.money(S.total(cart))}</strong></div><div class="summary-total"><span>Total</span><strong class="total">${S.money(S.total(cart))}</strong></div>${page() === 'checkout' && cart.length ? inlineCheckout() : `<button class="primary full" id="toCheckout" ${cart.length ? '' : 'disabled'}>Review & checkout →</button>`}${cart.length ? '<button class="textbutton full" id="clearCart">Clear order</button>' : ''}<p class="notice">Online pickup · GCash or Maya<br>Payment verification is required before the crew prepares your order.</p></div></aside>`;
   }
   function inlineCheckout() {
-    return `<form id="checkoutForm"><h3>Pickup details</h3><label class="field">Your name<input name="customer" autocomplete="name" maxlength="80" required placeholder="Name for your order"></label><label class="field">Contact number (optional)<input name="phone" type="tel" autocomplete="tel" maxlength="30"></label><label class="field">Order notes (optional)<textarea name="notes" maxlength="300" placeholder="Requests for the crew"></textarea></label><label class="field">Payment method<select name="payment"><option>GCash</option><option>Maya</option></select></label><label class="checkbox"><input type="checkbox" required>I’ve reviewed the items, options, and total.</label><button class="primary full" style="margin-top:16px">Place pickup order · ${S.money(S.total(cart))}</button><p id="checkoutError" class="error" role="alert"></p><p class="mini-note">Create the order, transfer via your selected wallet, then upload proof for verification.</p></form>`;
+    return `<form id="checkoutForm"><div class="pickup-banner"><span aria-hidden="true">PICKUP ONLY</span><strong>Order for pickup only</strong></div><h3>Pickup details</h3><label class="field">Your name<input name="customer" autocomplete="name" maxlength="80" required readonly placeholder="Name for your order"></label><label class="field">Contact number<input name="phone" type="tel" autocomplete="tel" maxlength="20" required readonly placeholder="Contact number"></label><label class="field">Order notes (optional)<textarea name="notes" maxlength="300" placeholder="Requests for the crew"></textarea></label><label class="field">Payment method<select name="payment"><option>GCash</option><option>Maya</option></select></label><label class="checkbox"><input type="checkbox" required>I’ve reviewed the items, options, and total.</label><button class="primary full" style="margin-top:16px">Place pickup order · ${S.money(S.total(cart))}</button><p id="checkoutError" class="error" role="alert"></p><p class="mini-note">Create the order, transfer via your selected wallet, then upload proof for verification.</p></form>`;
   }
   function menu() {
     const products = S.products.filter(p => p.category === category && p.name.toLowerCase().includes(search.toLowerCase()));
@@ -48,6 +83,44 @@
     if(!ownOrders.length)return '<section class="checkout-layout"><span class="eyebrow">Order tracking</span><h1>No orders to track.</h1><p class="page-intro">Your connected database orders will appear here.</p><button class="primary" data-navigate="menu">Order from the menu</button></section>';
     return `<section class="checkout-layout"><span class="eyebrow">Live order tracking</span><h1>Track your order</h1><p class="page-intro">Status updates are synchronized with the database and crew portal.</p><div class="tracking-list">${ownOrders.map(order=>`<article class="card tracking-card"><div class="row between wrap"><div><small>Order ${U.shortId(order.id)}</small><h3>${e(order.customer)}</h3></div>${U.badge(order.status)}</div><p>${order.items.map(i=>`${i.qty} × ${e(i.name)}`).join(', ')}</p><div class="tracking-progress" role="list" aria-label="Order progress">${['Pending','Preparing','Ready','Completed'].map((status,index)=>{const step=['Pending','Preparing','Ready','Completed'].indexOf(order.status);return `<span class="${index<=step?'active':''} ${status==='Cancelled'?'': ''}" role="listitem">${status}</span>`}).join('')} </div><div class="row between wrap"><strong>${S.money(order.total)}</strong><small>${order.paymentStatus} · ${e(order.payment)}</small></div>${order.status==='Cancelled'?'<p class="error">This order was cancelled.</p>':''}</article>`).join('')}</div></section>`;
   }
+  function profile() {
+    if (!S.customer?.verified) {
+      navigate('menu');
+      showCustomerLogin();
+      loginDialog.showModal();
+      return '';
+    }
+    const customer = S.customer;
+    const initial = e((customer.name || 'Customer').trim().charAt(0).toUpperCase());
+    return `<section class="profile-page">
+      <div class="profile-shell">
+        <div class="profile-topbar">
+          <button class="profile-back" type="button" data-navigate="menu" aria-label="Back to menu">←</button>
+          <strong>Edit Profile</strong>
+          <span class="profile-topbar-space"></span>
+        </div>
+        <form class="customer-profile-form" id="customerProfileForm">
+          <div class="profile-avatar-wrap">
+            <div class="profile-avatar" aria-hidden="true">${initial}</div>
+            <span class="eyebrow">Customer account</span>
+          </div>
+          <label class="profile-field">Username
+            <input name="name" autocomplete="name" maxlength="100" required value="${e(customer.name || '')}">
+          </label>
+          <label class="profile-field">Email address
+            <input name="email" type="email" autocomplete="email" maxlength="255" required value="${e(customer.email || '')}">
+          </label>
+          <label class="profile-field">Phone number
+            <input name="phone" type="tel" autocomplete="tel" maxlength="20" required value="${e(customer.phone || '')}">
+          </label>
+          <button class="primary full profile-update" type="submit">Update</button>
+          <button class="profile-password outline full" id="customerProfilePassword" type="button">Change password</button>
+          <button class="profile-logout outline full" id="customerProfileLogout" type="button">Log out</button>
+          <p id="customerProfileError" class="error" role="alert"></p>
+        </form>
+      </div>
+    </section>`;
+  }
   function about() {
     const b = S.business;
     return `<section class="info-page"><span class="eyebrow">More than a cup</span><h1>A place for your everyday pause.</h1><p class="page-intro">Get to know ISTILO — the place, the people, and the story behind your cup.</p><div class="story-banner"><div><span class="eyebrow">Our story</span><h2>${e(b.tagline)}</h2><p>${e(b.story)}</p><p>Choose a favorite from our coffee, milk tea, frappe, latte, matcha, and snack menu.</p></div><div class="place-visual"><div>☕<small>Shop photo to be added</small></div></div></div><div class="grid facts"><div class="card fact"><small>Our place</small><h3>Visit ISTILO</h3><p>${detail(b.address, 'Shop location to be added')}</p><p>${detail(b.hours, 'Opening hours to be added')}</p></div><div class="card fact"><small>The beginning</small><h3>Our foundation</h3><p>${detail(b.founded, 'Founding date to be added')}</p></div><div class="card fact"><small>Behind the counter</small><h3>Our owner</h3><p>${detail(b.owner, 'Owner’s name and story to be added')}</p></div></div><div class="section-head"><div><span class="eyebrow">The people who make your day</span><h2>Meet the crew</h2></div></div><div class="people-grid">${b.crew.length ? b.crew.map(p => `<article class="card"><div class="person-icon" aria-hidden="true">☕</div><h3>${e(p.name)}</h3><p class="muted">${e(p.role)}</p></article>`).join('') : '<article class="card"><div class="person-icon" aria-hidden="true">☕</div><h3>Our crew</h3><p class="muted">Crew names, roles, and photos will be added here.</p></article>'}</div><div class="card" style="margin-top:26px"><span class="eyebrow">Our tagline</span><h2 style="margin-top:12px">“${e(b.tagline)}”</h2></div></section>`;
@@ -57,6 +130,7 @@
     return `<section class="info-page"><span class="eyebrow">We’re here for your questions</span><h1>Let’s talk over coffee.</h1><p class="page-intro">Ask about the menu, share feedback, or find out how to get in touch with the owner.</p><div class="grid two"><div class="card"><h3>Visit or say hello</h3><dl class="contact-list"><dt>Owner</dt><dd>${detail(b.owner, 'Owner contact name to be added')}</dd><dt>Email</dt><dd>${b.email ? `<a href="mailto:${e(b.email)}">${e(b.email)}</a>` : placeholder('Official email to be added')}</dd><dt>Phone</dt><dd>${b.phone ? `<a href="tel:${e(b.phone)}">${e(b.phone)}</a>` : placeholder('Official phone number to be added')}</dd><dt>Find us</dt><dd>${detail(b.address, 'Shop location to be added')}</dd><dt>Opening hours</dt><dd>${detail(b.hours, 'Opening hours to be added')}</dd></dl><p class="notice">Official owner details haven’t been supplied yet. Contact links will appear when they are added.</p></div><form class="card contact-form" id="contactForm"><h3>Leave a message</h3><label class="field">Your name<input name="name" autocomplete="name" maxlength="80" required></label><label class="field">Email address<input name="email" type="email" autocomplete="email" maxlength="120" required></label><label class="field">What’s on your mind?<select name="topic"><option>Menu question</option><option>Order question</option><option>Feedback</option><option>Contact the owner</option><option>Other</option></select></label><label class="field">Message<textarea name="message" maxlength="2000" required placeholder="We’d love to hear from you."></textarea></label><label class="checkbox"><input type="checkbox" required>I consent to sharing my contact details with the shop to handle this inquiry.</label><button class="primary full">Send inquiry ↗</button><p class="muted" style="font-size:11px">Your message is saved securely to the shop inbox. This form does not send email.</p><p id="contactStatus" role="status"></p></form></div></section>`;
   }
   function render() {
+    updateNotifications();
     const existingForm = document.getElementById('checkoutForm');
     if (existingForm) {
       const values = new FormData(existingForm);
@@ -71,7 +145,7 @@
       loginDialog.showModal();
       return;
     }
-    root.innerHTML = ({ menu, checkout: menu, confirmation, tracking, about, contact })[current]();
+    root.innerHTML = ({ menu, checkout: menu, confirmation, tracking, about, contact, profile })[current]();
     document.querySelectorAll('[data-nav]').forEach(a => { const active = a.dataset.nav === (['checkout', 'confirmation'].includes(current) ? 'menu' : current === 'tracking' ? 'tracking' : current); a.classList.toggle('active', active); if (active) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     root.querySelectorAll('[data-category]').forEach(b => b.onclick = () => { category = b.dataset.category; search = ''; render(); });
     root.querySelectorAll('[data-product]').forEach(b => b.onclick = () => { if (requireCustomer()) pick(b.dataset.product); });
@@ -80,15 +154,15 @@
     const back = document.getElementById('backCategories');
     if (back) back.onclick = () => { category = null; search = ''; render(); };
     const clear = document.getElementById('clearCart');
-    if (clear) clear.onclick = () => {
-      if (!window.confirm('Clear every item from your current order?')) return;
+    if (clear) clear.onclick = async () => {
+      if (!await U.confirm('Clear every item from your current order?', 'Clear order?')) return;
       cart.splice(0);
       render();
     };
     const next = document.getElementById('toCheckout');
-    if (next) next.onclick = () => {
+    if (next) next.onclick = async () => {
       if (!requireCustomer()) return;
-      if (!window.confirm('Review your items, options, quantity, and total before proceeding to checkout?')) return;
+      if (!await U.confirm('Review your items, options, quantity, and total before proceeding to checkout?', 'Proceed to checkout?')) return;
       navigate('checkout');
       setTimeout(() => document.getElementById('checkoutForm')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
     };
@@ -98,6 +172,8 @@
     const form = document.getElementById('checkoutForm');
     if (form) {
       for (const name of ['customer', 'phone', 'notes', 'payment']) form.elements[name].value = checkoutDraft[name];
+      if (!checkoutDraft.customer && S.customer?.name) form.elements.customer.value = S.customer.name;
+      if (!checkoutDraft.phone && S.customer?.phone) form.elements.phone.value = S.customer.phone;
       form.querySelector('[type="checkbox"]').checked = checkoutDraft.reviewed;
     }
     if (form) form.onsubmit = async event => {
@@ -106,7 +182,7 @@
       const values = new FormData(form);
       const name = values.get('customer').trim();
       if (!name) { document.getElementById('checkoutError').textContent = 'Please enter your name.'; return; }
-      if (!window.confirm('Please confirm that you reviewed your items, options, quantity, payment method, and total before placing this order.')) return;
+      if (!await U.confirm('Please confirm that you reviewed your items, options, quantity, payment method, and total before placing this order.', 'Place this order?', 'Yes, place order')) return;
       try {
         receipt = await S.addOrder(cart, { customer: name, phone: values.get('phone').trim(), notes: values.get('notes').trim(), payment: values.get('payment'), source: 'Customer', type: 'Pickup' });
         cart.splice(0);
@@ -121,6 +197,44 @@
       if (!message.name || !message.message) return U.toast('Enter your name and message.');
       try { await S.write('inquiries', [...S.read('inquiries', []), message]); contactForm.reset(); document.getElementById('contactStatus').textContent = 'Your message was received by the shop.'; } catch (err) { U.toast(err.message); }
     };
+    const profileForm = document.getElementById('customerProfileForm');
+    if (profileForm) profileForm.onsubmit = async event => {
+      event.preventDefault();
+      const values = new FormData(profileForm);
+      const error = document.getElementById('customerProfileError');
+      error.textContent = '';
+      try {
+        await S.updateCustomerProfile({
+          name: values.get('name').trim(),
+          phone: values.get('phone').trim(),
+          email: values.get('email').trim()
+        });
+        await S.refresh(true);
+        updateLoginButton();
+        U.toast('Profile updated successfully.');
+        render();
+      } catch (err) {
+        error.textContent = err.message;
+      }
+    };
+    const profileLogout = document.getElementById('customerProfileLogout');
+    if (profileLogout) profileLogout.onclick = async () => {
+      if (!await U.confirm('Are you sure you want to log out?', 'Log out?', 'Yes, log out')) return;
+      await S.logout();
+      await S.refresh(true);
+      updateLoginButton();
+      navigate('menu');
+      U.toast('You have been logged out.');
+    };
+    const profilePassword = document.getElementById('customerProfilePassword');
+    if (profilePassword) profilePassword.onclick = () => {
+      showCustomerLogin();
+      document.getElementById('customerLoginForm').hidden = true;
+      document.getElementById('customerRegisterForm').hidden = true;
+      document.getElementById('customerForgotForm').hidden = false;
+      document.getElementById('customerResetIdentifier').value = S.customer?.email || '';
+      loginDialog.showModal();
+    };
   }
   document.getElementById('customerMenuToggle').onclick = () => {
     const nav=document.getElementById('customerNav');
@@ -130,6 +244,7 @@
   document.querySelectorAll('#customerNav a').forEach(link=>link.onclick=()=>{document.getElementById('customerNav').classList.remove('open');document.getElementById('customerMenuToggle').setAttribute('aria-expanded','false');});
   document.getElementById('closeCustomerLogin').onclick = () => loginDialog.close();
   document.getElementById('closeCustomerRegister').onclick = () => loginDialog.close();
+  document.getElementById('closeCustomerForgot').onclick = () => loginDialog.close();
   document.getElementById('showCustomerRegister').onclick = () => {
     document.getElementById('customerLoginForm').hidden = true;
     document.getElementById('customerRegisterForm').hidden = false;
@@ -138,16 +253,19 @@
   document.getElementById('showCustomerLogin').onclick = () => {
     document.getElementById('customerRegisterForm').hidden = true;
     document.getElementById('customerLoginForm').hidden = false;
+    document.getElementById('customerForgotForm').hidden = true;
     document.getElementById('customerIdentifier').focus();
   };
+  document.getElementById('showForgotPassword').onclick = () => {
+    document.getElementById('customerLoginForm').hidden = true;
+    document.getElementById('customerRegisterForm').hidden = true;
+    document.getElementById('customerForgotForm').hidden = false;
+    document.getElementById('customerResetIdentifier').focus();
+  };
+  document.getElementById('backToCustomerLogin').onclick = () => showCustomerLogin();
   document.getElementById('loginButton').onclick = async () => {
     if (S.customer?.verified) {
-      if (!window.confirm('Are you sure you want to log out?')) return;
-      await S.logout();
-      await S.refresh(true);
-      updateLoginButton();
-      U.toast('You have been logged out.');
-      render();
+      navigate('profile');
       return;
     }
     document.getElementById('customerLoginError').textContent = '';
@@ -179,7 +297,7 @@
     const values = new FormData(form);
     document.getElementById('customerRegisterError').textContent = '';
     try {
-      await S.customerRegister(values.get('email').trim(), values.get('phone').trim(), values.get('password'));
+      await S.customerRegister(values.get('name').trim(), values.get('email').trim(), values.get('phone').trim(), values.get('password'), values.get('terms') === 'on');
       await S.refresh(true);
       updateLoginButton();
       loginDialog.close();
@@ -190,11 +308,46 @@
       document.getElementById('customerRegisterError').textContent = err.message;
     }
   };
+  document.getElementById('customerForgotForm').onsubmit = async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = new FormData(form);
+    const error = document.getElementById('customerForgotError');
+    error.textContent = '';
+    if (values.get('password') !== values.get('confirm')) {
+      error.textContent = 'Passwords do not match.';
+      return;
+    }
+    try {
+      const identifier = values.get('identifier').trim();
+      await S.customerResetPassword(identifier, values.get('password'));
+      form.reset();
+      showCustomerLogin();
+      document.getElementById('customerIdentifier').value = identifier;
+      document.getElementById('customerIdentifier').focus();
+      U.toast('Password changed successfully. Please log in.');
+    } catch (err) {
+      error.textContent = err.message;
+    }
+  };
+  document.getElementById('notificationButton').onclick = () => {
+    const notifications = orderNotifications();
+    const list = document.getElementById('customerNotificationsList');
+    list.innerHTML = notifications.length ? notifications.map(item => `<article class="notification-item ${item.type === 'rejected' ? 'rejected' : ''}"><strong>${e(item.title)}</strong><p>${e(item.message)}</p><small>${e(S.date(item.time))}</small></article>`).join('') : '<div class="empty">No order updates yet.</div>';
+    localStorage.setItem('istilo:seenCustomerNotifications', JSON.stringify(notifications.map(item => item.key)));
+    updateNotifications();
+    notificationsDialog.showModal();
+  };
+  document.getElementById('closeCustomerNotifications').onclick = () => notificationsDialog.close();
+  document.getElementById('viewTrackedOrders').onclick = () => {
+    notificationsDialog.close();
+    navigate('tracking');
+  };
   window.addEventListener('hashchange', () => { render(); root.focus(); window.scrollTo(0, 0); });
   window.addEventListener('storage', event => {
     if (!Object.values(S.keys).includes(event.key)) return;
     // Preserve fields while someone is typing into checkout or contact forms.
-    if (['menu', 'confirmation'].includes(page())) render();
+    if (['menu', 'confirmation', 'profile'].includes(page())) render(); 
     else if (event.key === S.keys.availability) U.toast('Menu availability changed. Your cart will be checked at checkout.');
   });
   updateLoginButton();

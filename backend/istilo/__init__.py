@@ -98,6 +98,10 @@ def create_app(overrides=None):
             abort(404)
         return send_from_directory(ROOT / portal, filename)
 
+    @app.get('/api/product-images/<path:filename>')
+    def product_image(filename):
+        return send_from_directory(Path(instance) / 'product-images', filename)
+
     from .auth import auth
     from .routes import api
     from .payments import payments

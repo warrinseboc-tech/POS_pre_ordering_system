@@ -3,8 +3,8 @@
   'use strict';
   const portal = ['admin','crew'].includes(location.pathname.split('/')[1]) ? location.pathname.split('/')[1] : 'customer';
   const categories = [['Coffee','☕','Espresso, made your way.'],['Milk Tea','🧋','Tea, pearls, and a moment to yourself.'],['Frappe','🥤','Cool, creamy, and full of flavor.'],['Latte','☕','Your everyday espresso companion.'],['Matcha','🍵','Earthy matcha meets creamy comfort.'],['Snacks','🥐','Small bites for your coffee break.']].map(([name,icon,description])=>({name,icon,description}));
-  const keys=Object.fromEntries(['products','orders','availability','inquiries','shifts','profiles','staff','expenses','proofs'].map(name=>[name,'api:'+name]));
-  let state={products:[],orders:[],availability:{},staff:[],inquiries:[],shifts:[],profiles:{},expenses:[],proofs:[],business:{},wallets:[],user:null,customer:null,csrf:''};
+  const keys=Object.fromEntries(['products','orders','availability','inquiries','shifts','profiles','staff','expenses','inventory','inventoryAdjustments','proofs'].map(name=>[name,'api:'+name]));
+  let state={products:[],orders:[],availability:{},staff:[],inquiries:[],shifts:[],profiles:{},expenses:[],inventory:[],inventoryAdjustments:[],proofs:[],business:{},wallets:[],user:null,customer:null,csrf:''};
   let refreshing=null, mutating=0;
   async function api(path, options={}) {
     const headers={'X-Portal':portal,'X-CSRF-Token':state.csrf,...options.headers};
@@ -102,7 +102,9 @@
     recordPayment:async(id,paid)=>(await mutate('/orders/'+id+'/cash','POST',{paid})).order,
     login:async(employee,password,role=portal)=>{await mutate('/auth/login','POST',{employee,password,role});return store.user;},
     customerLogin:async(identifier,password)=>(await mutate('/auth/customer/login','POST',{identifier,password})).user,
-    customerRegister:async(email,phone,password)=>(await mutate('/auth/customer/register','POST',{email,phone,password})).user,
+    customerRegister:async(name,email,phone,password,terms=false)=>(await mutate('/auth/customer/register','POST',{name,email,phone,password,terms})).user,
+    customerResetPassword:async(identifier,password)=>(await mutate('/auth/customer/reset-password','POST',{identifier,password})).ok,
+    updateCustomerProfile:async(data)=>(await mutate('/auth/customer/profile','PATCH',data)).user,
     logout:()=>mutate('/auth/logout'),
     uploadProof:(id,body)=>mutate('/orders/'+id+'/proof','POST',body),
     reviewProof:(id,body)=>mutate('/payments/proofs/'+id+'/review','POST',body),

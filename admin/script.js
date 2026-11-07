@@ -3,6 +3,7 @@ await Istilo.ready;
 
 const $ = id => document.getElementById(id);
 const S = window.Istilo;
+const U = window.IstiloUI;
 if (typeof Chart === 'function') { Chart.defaults.color = '#dec1a0'; Chart.defaults.borderColor = '#514031'; Chart.defaults.font.family = 'Arial, Helvetica, sans-serif'; }
 let statusTimer;
 function notify(message) {
@@ -18,6 +19,78 @@ const money = value => "₱" + Number(value).toLocaleString("en-PH", {
   maximumFractionDigits: 2
 });
 
+let productCrop = {x: 0, y: 0, scale: 1, dragging: false, startX: 0, startY: 0};
+
+function resetProductCrop() {
+  productCrop.x = 0;
+  productCrop.y = 0;
+  productCrop.scale = 1;
+  $("productImageScale").value = "100";
+  $("productImageScaleValue").textContent = "100%";
+  applyProductImageAdjustment();
+}
+
+function clampProductCrop(preview, image) {
+  const zoom = productCrop.scale;
+  const width = Math.max(1, preview.clientWidth);
+  const height = Math.max(1, preview.clientHeight);
+  const base = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const renderedWidth = image.naturalWidth * base * zoom;
+  const renderedHeight = image.naturalHeight * base * zoom;
+  const maxX = Math.max(0, (renderedWidth - width) / 2);
+  const maxY = Math.max(0, (renderedHeight - height) / 2);
+  productCrop.x = Math.max(-maxX, Math.min(maxX, productCrop.x));
+  productCrop.y = Math.max(-maxY, Math.min(maxY, productCrop.y));
+}
+
+function applyProductImageAdjustment() {
+  const preview = $("productImagePreview");
+  const image = preview.querySelector("img");
+  if (!image || !image.complete) return;
+  productCrop.scale = Number($("productImageScale").value) / 100;
+  clampProductCrop(preview, image);
+  const width = Math.max(1, preview.clientWidth);
+  const height = Math.max(1, preview.clientHeight);
+  const base = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+  const renderedWidth = image.naturalWidth * base * productCrop.scale;
+  const renderedHeight = image.naturalHeight * base * productCrop.scale;
+  image.style.width = `${renderedWidth}px`;
+  image.style.height = `${renderedHeight}px`;
+  image.style.left = `${(width - renderedWidth) / 2 + productCrop.x}px`;
+  image.style.top = `${(height - renderedHeight) / 2 + productCrop.y}px`;
+}
+
+$("productImageScale").addEventListener("input", () => {
+  $("productImageScaleValue").textContent = `${$("productImageScale").value}%`;
+  applyProductImageAdjustment();
+});
+$("resetProductImage").addEventListener("click", resetProductCrop);
+
+const imagePreview = $("productImagePreview");
+imagePreview.addEventListener("pointerdown", event => {
+  if (!imagePreview.querySelector("img")) return;
+  productCrop.dragging = true;
+  productCrop.startX = event.clientX - productCrop.x;
+  productCrop.startY = event.clientY - productCrop.y;
+  imagePreview.setPointerCapture(event.pointerId);
+  imagePreview.classList.add("dragging");
+});
+imagePreview.addEventListener("pointermove", event => {
+  if (!productCrop.dragging) return;
+  productCrop.x = event.clientX - productCrop.startX;
+  productCrop.y = event.clientY - productCrop.startY;
+  applyProductImageAdjustment();
+});
+function stopImageDrag(event) {
+  productCrop.dragging = false;
+  imagePreview.classList.remove("dragging");
+  if (event.pointerId !== undefined && imagePreview.hasPointerCapture(event.pointerId)) {
+    imagePreview.releasePointerCapture(event.pointerId);
+  }
+}
+imagePreview.addEventListener("pointerup", stopImageDrag);
+imagePreview.addEventListener("pointercancel", stopImageDrag);
+
 const today = () => {
   return S.today(new Date());
 };
@@ -31,6 +104,8 @@ function escapeHTML(value) {
 
 let products = S.products;
 let expenses = S.read('expenses', []);
+let inventory = S.read('inventory', []);
+let inventoryAdjustments = S.read('inventoryAdjustments', []);
 let transactions = [];
 let preorders = [];
 let staff = S.staff();
@@ -185,7 +260,12 @@ function renderProducts() {
     ["Product","Category","Price","Status","Actions"],
     products.map(p => `
       <tr>
-        <td>${escapeHTML(p.name)}</td>
+        <td>
+          <div class="admin-product-name">
+            ${p.imageUrl ? `<span class="admin-product-thumb"><img src="${escapeHTML(p.imageUrl)}" alt=""></span>` : '<span class="admin-product-placeholder" aria-hidden="true">☕</span>'}
+            <span>${escapeHTML(p.name)}</span>
+          </div>
+        </td>
         <td>${escapeHTML(p.category)}</td>
         <td>${money(p.price)}</td>
         <td>
@@ -210,6 +290,11 @@ $("addProductBtn").addEventListener("click", () => {
   $("productForm").reset();
   $("editProductId").value = "";
   $("productFormTitle").textContent = "Add Product";
+  $("productImagePreview").textContent = "No image selected";
+  $("productImagePreview").classList.remove("has-image");
+  $("productImageScale").value = "100";
+  $("productImageScaleValue").textContent = "100%";
+  resetProductCrop();
   $('productFlavors').value = 'Original';
   $('productLargeExtra').value = '20';
   $("productDialog").showModal();
@@ -231,9 +316,75 @@ window.editProduct = async function(id) {
   $("productStatus").value = String(S.available(p.id));
   $('productFlavors').value = p.flavors.join(', ');
   $('productLargeExtra').value = p.sizes.find(s => s.name === 'Large')?.extra ?? 20;
+  if (p.imageUrl) {
+    $("productImagePreview").innerHTML = `<img src="${escapeHTML(p.imageUrl)}" alt="${escapeHTML(p.name)}">`;
+    $("productImagePreview").classList.add("has-image");
+    $("productImageScale").value = String(Math.round(Number(p.imageScale || 1) * 100));
+    $("productImageScaleValue").textContent = `${$("productImageScale").value}%`;
+    const image = $("productImagePreview").querySelector("img");
+    image.onload = applyProductImageAdjustment;
+    if (image.complete) applyProductImageAdjustment();
+  } else {
+    $("productImagePreview").textContent = "No image selected";
+    $("productImagePreview").classList.remove("has-image");
+  }
   $("productFormTitle").textContent = "Edit Product";
   $("productDialog").showModal();
 };
+
+$("productImage").addEventListener("change", event => {
+  const file = event.target.files[0];
+  if (!file) {
+    $("productImagePreview").textContent = "No image selected";
+    $("productImagePreview").classList.remove("has-image");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("productImagePreview").innerHTML = `<img src="${reader.result}" alt="Selected product preview">`;
+    $("productImagePreview").classList.add("has-image");
+    resetProductCrop();
+    const image = $("productImagePreview").querySelector("img");
+    image.onload = applyProductImageAdjustment;
+  };
+  reader.readAsDataURL(file);
+});
+
+async function createCroppedProductImage() {
+  const preview = $("productImagePreview");
+  const previewImage = preview.querySelector("img");
+  if (!previewImage) return null;
+
+  const source = await new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("The selected image could not be loaded."));
+    image.src = previewImage.src;
+  });
+
+  const outputWidth = 800;
+  const outputHeight = 450;
+  const previewWidth = preview.clientWidth || outputWidth;
+  const previewHeight = preview.clientHeight || outputHeight;
+  const baseScale = Math.max(previewWidth / source.naturalWidth, previewHeight / source.naturalHeight);
+  const renderedScale = baseScale * productCrop.scale;
+  const renderedWidth = source.naturalWidth * renderedScale;
+  const renderedHeight = source.naturalHeight * renderedScale;
+  const left = (previewWidth - renderedWidth) / 2 + productCrop.x;
+  const top = (previewHeight - renderedHeight) / 2 + productCrop.y;
+
+  const sourceX = Math.max(0, -left / renderedScale);
+  const sourceY = Math.max(0, -top / renderedScale);
+  const sourceWidth = Math.min(source.naturalWidth - sourceX, previewWidth / renderedScale);
+  const sourceHeight = Math.min(source.naturalHeight - sourceY, previewHeight / renderedScale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
+  const context = canvas.getContext("2d");
+  context.drawImage(source, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, outputWidth, outputHeight);
+  return await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
+}
 
 $("productForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -243,21 +394,23 @@ $("productForm").addEventListener("submit", async event => {
   const id = $("editProductId").value;
 
   if (!name || !Number.isFinite(price) || price <= 0) {
-    alert("Enter a valid product name and price.");
+    notify("Enter a valid product name and price.");
     return;
   }
 
-  const data = {
-    name,
-    category:$("productCategory").value,
-    description:$("productDescription").value.trim(),
-    price,
-    id: id || undefined,
-    flavors: $('productFlavors').value.split(','),
-    largeExtra: Number($('productLargeExtra').value)
-  };
+  const data = new FormData();
+  data.append('name', name);
+  data.append('category', $("productCategory").value);
+  data.append('description', $("productDescription").value.trim());
+  data.append('price', String(price));
+  if (id) data.append('id', id);
+  data.append('flavors', JSON.stringify($('productFlavors').value.split(',')));
+  data.append('largeExtra', String(Number($('productLargeExtra').value)));
+  data.append('imageScale', String(Number($("productImageScale").value) / 100));
 
   attempt(async () => {
+    const croppedImage = await createCroppedProductImage();
+    if (croppedImage) data.append('image', croppedImage, 'product.jpg');
     const product = await S.saveProduct(data);
     const availability = S.read('availability', {});
     availability[product.id] = $('productStatus').value === 'true';
@@ -271,6 +424,113 @@ $("productForm").addEventListener("submit", async event => {
 window.toggleProduct = async function(id) {
   attempt(async () => { const availability = S.read('availability', {}); availability[id] = !S.available(id); await S.write('availability', availability); refresh(); notify('Availability updated in all three portals.'); });
 };
+
+// INVENTORY MANAGEMENT
+function renderInventory() {
+  const lowStock = inventory.filter(i => Number(i.quantity) <= Number(i.minimum));
+  summaryCards("inventoryStats", [
+    ["Total Ingredients", inventory.length],
+    ["Low Stock Items", lowStock.length],
+    ["Stock Adjustments", inventoryAdjustments.length],
+    ["Inventory Units", inventory.reduce((sum,i) => sum + Number(i.quantity), 0).toLocaleString("en-PH",{maximumFractionDigits:3})]
+  ]);
+  $("inventoryTable").innerHTML = createTable(
+    ["Ingredient","Type","Quantity","Unit","Status","Actions"],
+    inventory.map(i => {
+      const low = Number(i.quantity) <= Number(i.minimum);
+      return `<tr><td>${escapeHTML(i.name)}</td><td>${escapeHTML(i.category)}</td><td><strong>${Math.round(Number(i.quantity)).toLocaleString("en-PH")}</strong></td><td>${escapeHTML(i.unit)}</td><td><span class="status ${low ? "cancelled" : "available"}">${low ? "Low stock" : "In stock"}</span></td><td><button type="button" class="action" data-add-stock="${escapeHTML(i.id)}">Add / Deduct</button> <button type="button" class="action" data-edit-inventory="${escapeHTML(i.id)}">Edit</button> <button type="button" class="action danger" data-remove-stock="${escapeHTML(i.id)}">Delete</button></td></tr>`;
+    })
+  );
+  $("inventoryTable").querySelectorAll("[data-add-stock]").forEach(button => {
+    button.onclick=()=>openInventoryAdjustment(button.dataset.addStock);
+  });
+  $("inventoryTable").querySelectorAll("[data-remove-stock]").forEach(button => {
+    button.onclick=()=>removeInventoryItem(button.dataset.removeStock);
+  });
+  $("inventoryTable").querySelectorAll("[data-edit-inventory]").forEach(button => {
+    button.onclick=()=>openInventoryEditor(button.dataset.editInventory);
+  });
+  $("inventoryHistory").innerHTML = createTable(
+    ["Ingredient","Change","Quantity After","Date"],
+    inventoryAdjustments.map(a => `<tr><td>${escapeHTML(a.itemName)}</td><td>${a.change > 0 ? "+" : ""}${Math.round(Number(a.change)).toLocaleString("en-PH")}</td><td>${Math.round(Number(a.quantityAfter)).toLocaleString("en-PH")}</td><td>${escapeHTML(a.time)}</td></tr>`)
+  );
+}
+
+async function removeInventoryItem(id) {
+  const item=inventory.find(i=>i.id===id);
+  if(!item)return;
+  if(!await U.confirm(`Delete ${item.name} permanently from inventory?`, "Delete ingredient?", "Yes, delete"))return;
+  await attempt(async()=>{
+    await S.mutate("/inventory/"+encodeURIComponent(id)+"/delete","POST", {});
+    inventory=inventory.filter(entry=>entry.id!==id);
+    inventoryAdjustments=inventoryAdjustments.filter(entry=>entry.itemId!==id);
+    refresh();
+    notify("Ingredient deleted.");
+  });
+}
+
+function openInventoryEditor(id) {
+  const item=inventory.find(i=>i.id===id);
+  if(!item)return;
+  $("inventoryForm").reset();
+  $("editInventoryId").value=id;
+  $("inventoryFormTitle").textContent="Edit Ingredient";
+  $("inventoryName").value=item.name;
+  $("inventoryCategory").value=item.category;
+  $("inventoryUnit").value=item.unit;
+  $("inventoryQuantity").value=Math.round(Number(item.quantity));
+  $("inventoryMinimum").value=Math.round(Number(item.minimum));
+  $("inventoryDialog").showModal();
+}
+
+function openInventoryAdjustment(id) {
+  const item=inventory.find(i=>i.id===id);
+  if(!item)return;
+  $("inventoryAdjustId").value=id;
+  $("inventoryAdjustTitle").textContent=`Adjust ${item.name}`;
+  $("inventoryAdjustForm").reset();
+  $("inventoryAdjustId").value=id;
+  $("inventoryAdjustDialog").showModal();
+}
+
+$("addInventoryBtn").onclick=()=>{
+  $("inventoryForm").reset();
+  $("editInventoryId").value="";
+  $("inventoryFormTitle").textContent="Add Ingredient";
+  $("inventoryCategory").value="Ingredients";
+  $("inventoryQuantity").value="0";
+  $("inventoryMinimum").value="0";
+  $("inventoryDialog").showModal();
+};
+$("cancelInventoryBtn").onclick=()=>{$("inventoryDialog").close();};
+$("inventoryForm").onsubmit=async event=>{
+  event.preventDefault();
+  const data={name:$("inventoryName").value.trim(),category:$("inventoryCategory").value.trim(),unit:$("inventoryUnit").value.trim(),quantity:Number($("inventoryQuantity").value),minimum:Number($("inventoryMinimum").value)};
+  if(!data.name||!data.category||!data.unit||!Number.isInteger(data.quantity)||!Number.isInteger(data.minimum)||data.quantity<0||data.minimum<0){notify("Please enter whole-number ingredient quantities.");return;}
+  await attempt(async()=>{
+    const editId=$("editInventoryId").value;
+    if(editId) await S.mutate("/inventory/"+encodeURIComponent(editId),"PATCH",{name:data.name,category:data.category,unit:data.unit});
+    else await S.mutate("/inventory","POST",data);
+    $("inventoryDialog").close();
+    refresh();
+    notify(editId?"Ingredient updated.":"Ingredient added.");
+  });
+};
+$("cancelInventoryAdjustBtn").onclick=()=>{$("inventoryAdjustDialog").close();};
+$("inventoryAdjustForm").onsubmit=async event=>{
+  event.preventDefault();
+  const data={mode:$("inventoryAdjustMode").value,amount:Number($("inventoryAdjustAmount").value)};
+  if(!Number.isInteger(data.amount)||data.amount<=0){notify("Enter a whole-number quantity.");return;}
+  await attempt(async()=>{await S.mutate("/inventory/"+encodeURIComponent($("inventoryAdjustId").value)+"/adjust","POST",data);$("inventoryAdjustDialog").close();refresh();notify("Stock adjusted.");});
+};
+document.querySelectorAll("[data-step-target]").forEach(button=>{
+  button.onclick=()=>{
+    const input=$(button.dataset.stepTarget);
+    const current=Number(input.value)||0;
+    const minimum=Number(input.min)||0;
+    input.value=String(Math.max(minimum,current+Number(button.dataset.step)));
+  };
+});
 
 // EXPENSES MANAGEMENT
 function renderExpenses() {
@@ -378,7 +638,7 @@ $("expenseForm").addEventListener("submit", async event => {
   const date = $("expenseDate").value;
 
   if (!name || !date || !Number.isFinite(amount) || amount <= 0) {
-    alert("Please enter valid expense details.");
+    notify("Please enter valid expense details.");
     return;
   }
 
@@ -406,7 +666,7 @@ $("expenseForm").addEventListener("submit", async event => {
 });
 
 window.deleteExpense = async function(id) {
-  if (!confirm("Are you sure you want to delete this expense?")) return;
+  if (!await U.confirm("Are you sure you want to delete this expense?", "Delete expense?", "Yes, delete")) return;
   expenses = expenses.filter(e => e.id !== id);
   if (!await save()) return;
   refresh();
@@ -444,21 +704,48 @@ window.updateOrderStatus = async function(id,status) {
 
 // SALES ANALYTICS
 function renderAnalytics() {
+  const productFilter = $("analyticsProductFilter");
+  const productNames = [...new Set(transactions.flatMap(t => (t.items || []).map(item => item.name || "Unknown Product")))].sort((a,b) => a.localeCompare(b));
+  if (productFilter.dataset.populated !== "true" || productFilter.options.length !== productNames.length + 1) {
+    const selected = productFilter.value;
+    productFilter.innerHTML = '<option value="">All products</option>' + productNames.map(name => `<option value="${escapeHTML(name)}">${escapeHTML(name)}</option>`).join("");
+    productFilter.value = selected;
+    productFilter.dataset.populated = "true";
+  }
+
+  const selectedProduct = productFilter.value;
+  const startDate = $("analyticsStartDate").value;
+  const endDate = $("analyticsEndDate").value;
+  const filteredSales = transactions.filter(t => {
+    const transactionDate = S.today(t.date);
+    const dateMatches = (!startDate || transactionDate >= startDate) && (!endDate || transactionDate <= endDate);
+    const productMatches = !selectedProduct || (t.items || []).some(item => (item.name || "Unknown Product") === selectedProduct);
+    return dateMatches && productMatches;
+  });
+
   const sold = {};
 
-  transactions.forEach(t => {
+  filteredSales.forEach(t => {
     (t.items || []).forEach(item => {
       const name = item.name || "Unknown Product";
+      if (selectedProduct && name !== selectedProduct) return;
       sold[name] = (sold[name] || 0)+Number(item.qty ?? item.quantity ?? 0);
     });
   });
 
   const ranked = Object.entries(sold).sort((a,b) => b[1]-a[1]);
+  const filteredRevenue = selectedProduct
+    ? filteredSales.reduce((sum,t) => sum + (t.items || [])
+        .filter(item => (item.name || "Unknown Product") === selectedProduct)
+        .reduce((itemSum,item) => itemSum + Number(item.qty ?? item.quantity ?? 0) * Number(item.price || 0),0),0)
+    : filteredSales.reduce((sum,t) => sum + Number(t.total || 0),0);
+  const filteredTransactions = filteredSales.length;
+  const averageOrderValue = filteredTransactions ? filteredRevenue / filteredTransactions : 0;
 
   summaryCards("analyticsStats",[
-    ["Total Revenue",money(totalSales())],
-    ["Completed Transactions",transactions.length],
-    ["Average Order Value",money(transactions.length ? totalSales()/transactions.length : 0)],
+    ["Total Revenue",money(filteredRevenue)],
+    ["Completed Transactions",filteredTransactions],
+    ["Average Order Value",money(averageOrderValue)],
     ["Best-Selling Product",ranked[0]?.[0] || "None"]
   ]);
 
@@ -511,6 +798,26 @@ function renderAnalytics() {
     });
   }
 }
+
+$("analyticsProductFilter").addEventListener("change", renderAnalytics);
+$("analyticsStartDate").addEventListener("change", () => {
+  if ($("analyticsEndDate").value && $("analyticsStartDate").value > $("analyticsEndDate").value) {
+    $("analyticsEndDate").value = $("analyticsStartDate").value;
+  }
+  renderAnalytics();
+});
+$("analyticsEndDate").addEventListener("change", () => {
+  if ($("analyticsStartDate").value && $("analyticsEndDate").value < $("analyticsStartDate").value) {
+    $("analyticsStartDate").value = $("analyticsEndDate").value;
+  }
+  renderAnalytics();
+});
+$("clearAnalyticsFilters").addEventListener("click", () => {
+  $("analyticsProductFilter").value = "";
+  $("analyticsStartDate").value = "";
+  $("analyticsEndDate").value = "";
+  renderAnalytics();
+});
 
 // REPORTS
 function renderReports() {
@@ -611,6 +918,54 @@ $("exportBtn").addEventListener("click", () => {
 });
 
 // CREW ACCOUNT MANAGEMENT
+function renderInquiries() {
+  const list = S.read('inquiries', []).slice().reverse();
+  if (!list.length) {
+    $("inquiriesTable").innerHTML = '<div class="empty">No customer inquiries yet.</div>';
+    return;
+  }
+  $("inquiriesTable").innerHTML = list.map(m => `
+    <article class="card inquiry-card">
+      <div class="row between wrap">
+        <div>
+          <span class="eyebrow">${escapeHTML(m.topic)}</span>
+          <h3 style="margin:8px 0">${escapeHTML(m.name)}</h3>
+          <a href="mailto:${escapeHTML(m.email)}">${escapeHTML(m.email)}</a>
+        </div>
+        <div><span class="status ${m.status === 'Resolved' ? 'available' : m.status === 'In progress' ? 'pending' : 'cancelled'}">${escapeHTML(m.status)}</span><p class="mini-note">${escapeHTML(m.time)}</p></div>
+      </div>
+      <p class="message">${escapeHTML(m.message)}</p>
+      <form class="inquiry-form" data-message="${escapeHTML(m.id)}">
+        <label class="field">Internal follow-up note
+          <textarea name="note" maxlength="2000">${escapeHTML(m.note || '')}</textarea>
+        </label>
+        <label class="field">Status
+          <select name="status">
+            ${['New','In progress','Resolved'].map(status => `<option value="${status}" ${status === m.status ? 'selected' : ''}>${status}</option>`).join('')}
+          </select>
+        </label>
+        <button type="submit" class="primary">Save inquiry</button>
+      </form>
+    </article>`).join('');
+  $("inquiriesTable").querySelectorAll('.inquiry-form').forEach(form => {
+    form.onsubmit = async event => {
+      event.preventDefault();
+      try {
+        const list = S.read('inquiries', []);
+        const inquiry = list.find(m => m.id === form.dataset.message);
+        if (!inquiry) throw new Error('Inquiry no longer exists.');
+        inquiry.note = new FormData(form).get('note').trim();
+        inquiry.status = new FormData(form).get('status');
+        await S.write('inquiries', list);
+        renderInquiries();
+        notify('Inquiry updated.');
+      } catch (error) {
+        notify(error.message);
+      }
+    };
+  });
+}
+
 function renderStaff() {
   $("staffTable").innerHTML = createTable(
     ["Staff Name","Employee ID","Role","Status","Actions"],
@@ -618,7 +973,7 @@ function renderStaff() {
       <tr>
         <td>${escapeHTML(s.name)}</td>
         <td>${escapeHTML(s.employeeId)}</td>
-        <td>Crew</td>
+        <td>${s.role === "admin" ? "Admin" : "Crew"}</td>
         <td>${s.active ? "Active" : "Inactive"}</td>
         <td>
           <button class="action" data-toggle-staff="${escapeHTML(s.employeeId)}">
@@ -633,6 +988,18 @@ function renderStaff() {
 
 $("addStaffBtn").addEventListener("click", () => {
   $('staffForm').reset();
+  $('staffRole').value = 'crew';
+  $('staffFormTitle').textContent = 'Create crew account';
+  $('staffForm').querySelector('button.primary').textContent = 'Save crew member';
+  $('staffDialog').showModal();
+});
+
+$("addAdminBtn").addEventListener("click", () => {
+  $('staffForm').reset();
+  $('staffRole').value = 'admin';
+  $('staffFormTitle').textContent = 'Create admin account';
+  $('staffForm').querySelector('button.primary').textContent = 'Save admin member';
+  $('staffEmployeeId').placeholder = 'ADMIN002';
   $('staffDialog').showModal();
 });
 
@@ -643,14 +1010,32 @@ $('staffForm').onsubmit = async event => {
     const list = S.staff(), name = $('staffName').value.trim(), employeeId = $('staffEmployeeId').value.trim().toUpperCase();
     if (!name || !/^[A-Z0-9_-]+$/.test(employeeId)) throw new Error('Enter a name and a valid employee ID.');
     if (list.some(s => s.employeeId === employeeId)) throw new Error('That employee ID already exists.');
-    list.push({ id: S.uid('STAFF'), employeeId, name, password: $('staffPassword').value, active: true });
-    await S.write('staff', list);
-    $('staffDialog').close(); refresh(); notify('Crew member added. Share the initial password privately.');
+    const role = $('staffRole').value === 'admin' ? 'admin' : 'crew';
+    await S.api('/staff', { method: 'POST', body: {
+      name,
+      employeeId,
+      role,
+      email: '',
+      password: $('staffPassword').value
+    }});
+    $('staffDialog').close();
+    await refresh();
+    staff = S.staff();
+    renderStaff();
+    notify(role === 'admin' ? 'Admin account added. Share the initial password privately.' : 'Crew member added. Share the initial password privately.');
   });
 };
 
 window.toggleStaff = async function(id) {
-  attempt(async () => { const list = S.staff(), member = list.find(s => s.employeeId === id); if (!member) throw new Error('Crew member not found.'); member.active = !member.active; await S.write('staff', list); refresh(); notify('Crew access updated.'); });
+  attempt(async () => {
+    const member = staff.find(s => s.employeeId === id);
+    if (!member) throw new Error('Staff member not found.');
+    await S.api(`/staff/${member.id}`, { method: 'PATCH', body: { active: !member.active } });
+    await refresh();
+    staff = S.staff();
+    renderStaff();
+    notify(`${member.role === 'admin' ? 'Admin' : 'Crew'} access updated.`);
+  });
 };
 
 // INITIALIZE
@@ -660,16 +1045,20 @@ function refresh() {
   if(!signedIn)return;
   products = S.products;
   expenses = S.read('expenses', []);
+  inventory = S.read('inventory', []);
+  inventoryAdjustments = S.read('inventoryAdjustments', []);
   staff = S.staff();
   preorders = S.read('orders', []).filter(o => o.source === 'Customer');
   const completed = S.sales();
   transactions = completed;
   renderDashboard();
   renderProducts();
+  renderInventory();
   renderExpenses();
   renderOrders();
   renderAnalytics();
   renderReports();
+  renderInquiries();
   renderStaff();
   renderPaymentProofs();
   $('expensesTable').querySelectorAll('[data-edit-expense]').forEach(b=>b.onclick=()=>editExpense(b.dataset.editExpense));
@@ -681,7 +1070,7 @@ function renderPaymentProofs() {
 }
 
 $('adminLoginForm').onsubmit=async event=>{event.preventDefault();try{await S.login($('adminEmployee').value,$('adminPassword').value,'admin');$('adminPassword').value='';$('adminLoginError').textContent='';refresh();}catch(err){$('adminLoginError').textContent=err.message;}};
-$('adminLogout').onclick=()=>attempt(async()=>{await S.logout();document.querySelectorAll('dialog[open]').forEach(d=>d.close());refresh();});
+$('adminLogout').onclick=async()=>{if(!await U.confirm('Are you sure you want to log out?', 'Log out?', 'Yes, log out'))return;attempt(async()=>{await S.logout();document.querySelectorAll('dialog[open]').forEach(d=>d.close());refresh();});};
 $('adminMenuToggle').onclick=()=>{const sidebar=$('adminSidebar');const open=sidebar.classList.toggle('open');$('adminMenuToggle').setAttribute('aria-expanded',String(open));};
 document.querySelectorAll('.sidebar .nav').forEach(button=>button.onclick=()=>{button.closest('.sidebar')?.classList.remove('open');$('adminMenuToggle').setAttribute('aria-expanded','false');});
 

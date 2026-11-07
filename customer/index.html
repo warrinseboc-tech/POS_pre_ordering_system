@@ -19,7 +19,12 @@
     <a class="brand" href="#menu" aria-label="ISTILO home"><span class="brand-icon" aria-hidden="true">☕</span><span><strong>ISTILO</strong><small>Coffee with style</small></span></a>
     <button id="customerMenuToggle" class="iconbutton mobile-only customer-menu-toggle" aria-label="Toggle navigation" aria-controls="customerNav" aria-expanded="false">☰</button>
     <nav id="customerNav" aria-label="Main navigation"><a href="#menu" data-nav="menu">Menu</a><a href="#tracking" data-nav="tracking">Track order</a><a href="#about" data-nav="about">About</a><a href="#contact" data-nav="contact">Contact</a></nav>
-    <div class="header-actions"><button id="loginButton" class="outline">Log in</button></div>
+    <div class="header-actions">
+      <button id="notificationButton" class="iconbutton notification-button" type="button" aria-label="Order notifications" aria-haspopup="dialog" hidden>
+        <span aria-hidden="true">🔔</span><span id="notificationBadge" class="notification-badge" hidden>0</span>
+      </button>
+      <button id="loginButton" class="outline">Log in</button>
+    </div>
   </header>
   <main id="content" tabindex="-1"></main>
   <footer><a class="brand" href="#menu"><strong>ISTILO</strong></a><span>A little pause. A cup of your own.</span><small>Canlubang, Calamba, Palao, Paikit, 4027 · GCash & Maya</small></footer>
@@ -32,6 +37,7 @@
       <label class="field">Email or phone<input id="customerIdentifier" name="identifier" autocomplete="username" maxlength="255" required placeholder="you@example.com"></label>
       <label class="field">Password<input id="customerPassword" name="password" type="password" autocomplete="current-password" maxlength="200" required></label>
       <button class="primary full" id="customerLoginSubmit">Log in & continue</button>
+      <button class="textbutton full" id="showForgotPassword" type="button">Forgot password?</button>
       <button class="textbutton full" id="showCustomerRegister" type="button">Create a customer account</button>
       <p id="customerLoginError" class="error" role="alert"></p>
     </form>
@@ -39,13 +45,35 @@
       <div class="row between"><span class="eyebrow">New customer</span><button type="button" class="iconbutton" id="closeCustomerRegister" aria-label="Close registration">×</button></div>
       <h2>Create your account</h2>
       <p>Register your account to unlock the menu and place pickup orders.</p>
+      <label class="field">Name<input id="customerRegisterName" name="name" autocomplete="name" maxlength="100" required placeholder="Your name"></label>
       <label class="field">Email<input id="customerRegisterEmail" name="email" type="email" autocomplete="email" maxlength="255" required placeholder="you@example.com"></label>
       <label class="field">Phone number<input id="customerRegisterPhone" name="phone" type="tel" autocomplete="tel" maxlength="20" required placeholder="09XXXXXXXXX"></label>
-      <label class="field">Password<input id="customerRegisterPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" required placeholder="At least 8 characters"></label>
+      <label class="field">Password<input id="customerRegisterPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" pattern="(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9\s]).{8,}" required placeholder="8+ characters, letter, number, symbol"></label>
+      <label class="checkbox"><input id="customerTerms" name="terms" type="checkbox" required> I agree to the Terms and Agreement.</label>
       <button class="primary full" id="customerRegisterSubmit">Create account</button>
       <button class="textbutton full" id="showCustomerLogin" type="button">Already have an account? Log in</button>
       <p id="customerRegisterError" class="error" role="alert"></p>
     </form>
+    <form class="dialog-body" id="customerForgotForm" hidden>
+      <div class="row between"><span class="eyebrow">Account recovery</span><button type="button" class="iconbutton" id="closeCustomerForgot" aria-label="Close password reset">×</button></div>
+      <h2>Reset your password</h2>
+      <p>Enter your registered email or phone and choose a new password.</p>
+      <label class="field">Email or phone<input id="customerResetIdentifier" name="identifier" autocomplete="username" maxlength="255" required placeholder="you@example.com"></label>
+      <label class="field">New password<input id="customerResetPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" pattern="(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9\s]).{8,}" required placeholder="8+ characters, letter, number, symbol"></label>
+      <label class="field">Confirm password<input id="customerResetConfirm" name="confirm" type="password" autocomplete="new-password" minlength="8" maxlength="200" required></label>
+      <button class="primary full" id="customerForgotSubmit">Change password</button>
+      <button class="textbutton full" id="backToCustomerLogin" type="button">Back to log in</button>
+      <p id="customerForgotError" class="error" role="alert"></p>
+    </form>
+  </dialog>
+  <dialog id="customerNotificationsDialog" aria-labelledby="customerNotificationsTitle">
+    <div class="dialog-body">
+      <div class="row between"><span class="eyebrow">Updates</span><button type="button" class="iconbutton" id="closeCustomerNotifications" aria-label="Close notifications">×</button></div>
+      <h2 id="customerNotificationsTitle">Order notifications</h2>
+      <p>Track payment and pickup progress here.</p>
+      <div id="customerNotificationsList" class="notification-list"></div>
+      <button class="outline full" id="viewTrackedOrders" type="button">View tracked orders</button>
+    </div>
   </dialog>
   <div id="toast" class="toast" role="status" hidden></div>
   <noscript><p class="loading-note">Please enable JavaScript to browse the menu and place an order.</p></noscript>

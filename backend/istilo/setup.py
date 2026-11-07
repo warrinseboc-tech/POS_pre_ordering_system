@@ -21,6 +21,18 @@ def initialize(app, seed=True):
         for statement in source.split(';'):
             if statement.strip(): cursor.execute(statement)
         # Upgrade an earlier local setup while keeping reference ownership and audit history.
+        cursor.execute("SHOW COLUMNS FROM accounts LIKE 'name'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE accounts ADD COLUMN name VARCHAR(100) NOT NULL DEFAULT '' AFTER password")
+        cursor.execute("SHOW COLUMNS FROM products LIKE 'image_url'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE products ADD COLUMN image_url VARCHAR(500) NOT NULL DEFAULT '' AFTER icon")
+        cursor.execute("SHOW COLUMNS FROM products LIKE 'image_position'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE products ADD COLUMN image_position VARCHAR(20) NOT NULL DEFAULT 'center' AFTER image_url")
+        cursor.execute("SHOW COLUMNS FROM products LIKE 'image_scale'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE products ADD COLUMN image_scale DECIMAL(3,2) NOT NULL DEFAULT 1.00 AFTER image_position")
         cursor.execute('INSERT IGNORE INTO payment_references(wallet,reference_number,order_id) SELECT wallet,reference_number,order_id FROM payment_proofs')
         cursor.execute("SHOW INDEX FROM payment_proofs WHERE Key_name='wallet_reference'")
         if cursor.fetchall():

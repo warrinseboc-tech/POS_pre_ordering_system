@@ -5,7 +5,7 @@
   function create({ user, rerender, cancel }) {
     const cart = [];
     let selectedId = null, category = 'All', search = '', receipt = null;
-    const draft = { customer: '', type: 'Takeaway', payment: 'Cash', cash: '' };
+    const draft = { customer: '', payment: 'Cash', cash: '' };
     let onlineCash = '', error = '';
     const all = () => S.read('orders', []);
     const selected = () => all().find(o => o.id === selectedId);
@@ -32,7 +32,7 @@
       const items = online ? order.items : cart, amount = online ? order.total : S.total(cart), paid = online && S.isPaid(order), cash = online ? onlineCash : draft.cash;
       const ended = online && ['Completed', 'Cancelled'].includes(order.status);
       const newOnline = online && paid && order.status === 'Pending' && !order.punchedAt;
-      return `<div class="row between"><h3>Current order</h3><small>${online ? U.shortId(order.id) : 'Walk-in'}</small></div><div class="order-modes"><button type="button" class="tab ${!online ? 'active' : ''}" id="walkInMode">Walk-in</button>${online ? `<span class="pill">${e(order.source === 'Customer' ? 'Online pickup' : 'Walk-in order')}</span>${U.badge(order.status)}` : '<span class="mini-note">Counter ordering</span>'}</div><label class="field">Customer name ${online ? '' : '(optional)'}<input id="orderCustomer" name="customer" maxlength="80" placeholder="Walk-in customer" value="${e(online ? order.customer : draft.customer)}" ${online ? 'readonly' : ''}></label>${!online ? `<label class="field">Order type<select id="orderType"><option ${draft.type === 'Takeaway' ? 'selected' : ''}>Takeaway</option><option ${draft.type === 'Dine-in' ? 'selected' : ''}>Dine-in</option></select></label>` : ''}<div class="current-items">${U.cartHTML(items, !online)}</div>${order?.notes ? `<p class="order-note">${e(order.notes)}</p>` : ''}<div class="summary-total"><span>Subtotal</span><strong>${S.money(amount)}</strong></div><div class="summary-total grand-total"><span>Total</span><strong class="total">${S.money(amount)}</strong></div>${online ? `<div class="row between"><span>Payment status</span><span class="payment-badge ${paid ? 'paid' : 'unpaid'}">${paid ? 'Paid' : e(order.paymentStatus)}</span></div>` : ''}${online && !paid && order.source === 'Customer' ? verificationHTML(order) : ''}${!ended && !paid && (!online || order.source !== 'Customer') ? `<form id="orderPaymentForm"><label class="field">Payment method<select id="orderPayment"><option ${draft.payment === 'Cash' ? 'selected' : ''}>Cash</option>${!online ? `<option ${draft.payment === 'Pay at counter' ? 'selected' : ''}>Pay at counter</option>` : ''}</select></label><label class="field">Cash received (₱)<input id="orderCash" type="number" min="0" step="0.01" value="${e(cash)}" placeholder="0.00" ${!online && draft.payment !== 'Cash' ? 'disabled' : ''}></label><div class="row between change-line"><span>Change</span><strong id="orderChange">${S.money(Math.max(0, (Number(cash) || 0) - amount))}</strong></div><button class="primary full" ${!items.length ? 'disabled' : ''}>${online ? 'Record payment' : draft.payment === 'Cash' ? 'Complete walk-in order' : 'Punch walk-in order'}</button></form>` : paid ? `<div class="notice">Payment already recorded. Do not charge this order again.${order.change ? '<br>Change: ' + S.money(order.change) : ''}</div>` : ''}${newOnline ? '<button class="primary full punch-online" id="punchOnline">Punch online order →</button><p class="mini-note">Punching sends this order to preparation. It does not collect payment.</p>' : ''}${online && order.status === 'Preparing' ? '<button class="primary full" id="markReady">Mark ready for pickup</button>' : ''}${online && order.status === 'Ready' ? `<button class="primary full" id="completePickup" ${!paid ? 'disabled' : ''}>Complete order</button>${!paid ? '<p class="mini-note">Record payment to complete this order.</p>' : ''}` : ''}${online && (paid || order.source !== 'Customer') && ['Pending', 'Preparing'].includes(order.status) ? '<button type="button" class="textbutton full" id="cancelActiveOrder">Cancel this order</button>' : ''}<button type="button" class="outline full" id="clearCurrent">${online ? 'Back to walk-in' : 'Clear order'}</button><p id="orderingError" class="error" role="alert">${e(error)}</p>${receipt ? `<div class="inline-receipt" role="status"><strong>${U.shortId(receipt.id)} · ${e(receipt.status)}</strong><small>Total ${S.money(receipt.total)} · Change ${S.money(receipt.change)}</small><button type="button" class="textbutton" id="dismissReceipt">Dismiss</button></div>` : ''}`;
+      return `<div class="row between"><h3>Current order</h3><small>${online ? U.shortId(order.id) : 'Walk-in'}</small></div><div class="order-modes"><button type="button" class="tab ${!online ? 'active' : ''}" id="walkInMode">Walk-in</button>${online ? `<span class="pill">${e(order.source === 'Customer' ? 'Online pickup' : 'Walk-in order')}</span>${U.badge(order.status)}` : '<span class="mini-note">Counter ordering</span>'}</div><label class="field">Customer name ${online ? '' : '(optional)'}<input id="orderCustomer" name="customer" maxlength="80" placeholder="Walk-in customer" value="${e(online ? order.customer : draft.customer)}" ${online ? 'readonly' : ''}></label><div class="current-items">${U.cartHTML(items, !online)}</div>${order?.notes ? `<p class="order-note">${e(order.notes)}</p>` : ''}<div class="summary-total"><span>Subtotal</span><strong>${S.money(amount)}</strong></div><div class="summary-total grand-total"><span>Total</span><strong class="total">${S.money(amount)}</strong></div>${online ? `<div class="row between"><span>Payment status</span><span class="payment-badge ${paid ? 'paid' : 'unpaid'}">${paid ? 'Paid' : e(order.paymentStatus)}</span></div>` : ''}${online && !paid && order.source === 'Customer' ? verificationHTML(order) : ''}${!ended && !paid && (!online || order.source !== 'Customer') ? `<form id="orderPaymentForm"><label class="field">Payment method<select id="orderPayment"><option ${draft.payment === 'Cash' ? 'selected' : ''}>Cash</option>${!online ? `<option ${draft.payment === 'Pay at counter' ? 'selected' : ''}>Pay at counter</option>` : ''}</select></label><label class="field">Cash received (₱)<input id="orderCash" type="number" min="0" step="0.01" value="${e(cash)}" placeholder="0.00" ${!online && draft.payment !== 'Cash' ? 'disabled' : ''}></label><div class="row between change-line"><span>Change</span><strong id="orderChange">${S.money(Math.max(0, (Number(cash) || 0) - amount))}</strong></div><button class="primary full" ${!items.length ? 'disabled' : ''}>${online ? 'Record payment' : draft.payment === 'Cash' ? 'Complete walk-in order' : 'Punch walk-in order'}</button></form>` : paid ? `<div class="notice">Payment already recorded. Do not charge this order again.${order.change ? '<br>Change: ' + S.money(order.change) : ''}</div>` : ''}${newOnline ? '<button class="primary full punch-online" id="punchOnline">Punch online order →</button><p class="mini-note">Punching sends this order to preparation. It does not collect payment.</p>' : ''}${online && order.status === 'Preparing' ? '<button class="primary full" id="markReady">Mark ready for pickup</button>' : ''}${online && order.status === 'Ready' ? `<button class="primary full" id="completePickup" ${!paid ? 'disabled' : ''}>Complete order</button>${!paid ? '<p class="mini-note">Record payment to complete this order.</p>' : ''}` : ''}${online && (paid || order.source !== 'Customer') && ['Pending', 'Preparing'].includes(order.status) ? '<button type="button" class="textbutton full" id="cancelActiveOrder">Cancel this order</button>' : ''}<button type="button" class="outline full" id="clearCurrent">${online ? 'Back to walk-in' : 'Clear order'}</button><p id="orderingError" class="error" role="alert">${e(error)}</p>${receipt ? `<div class="inline-receipt" role="status"><strong>${U.shortId(receipt.id)} · ${e(receipt.status)}</strong><small>Total ${S.money(receipt.total)} · Change ${S.money(receipt.change)}</small><button type="button" class="textbutton" id="dismissReceipt">Dismiss</button></div>` : ''}`;
     }
     function render() {
       S.syncCart(cart);
@@ -57,16 +57,15 @@
       });
       $('orderSearch').oninput = event => { search = event.target.value; const position = event.target.selectionStart; const menu = $('punchMenu'); menu.innerHTML = productHTML(); bind(root); const input = $('orderSearch'); input.focus(); input.setSelectionRange(position, position); };
       $('walkInMode').onclick = () => { resetSelection(); rerender(); };
-      $('clearCurrent').onclick = () => {
+      $('clearCurrent').onclick = async () => {
         const hasWalkIn=!selectedId&&cart.length>0;
         const hasSelection=!!selectedId;
-        if(hasWalkIn&&!window.confirm('Clear all items from the current walk-in order?'))return;
-        if(hasSelection&&!window.confirm('Leave this order and return to the walk-in counter?'))return;
-        if (!selectedId) { cart.splice(0); Object.assign(draft, { customer:'',type:'Takeaway',payment:'Cash',cash:'' }); } resetSelection(); rerender();
+        if(hasWalkIn&&!await U.confirm('Clear all items from the current walk-in order?','Clear current order?'))return;
+        if(hasSelection&&!await U.confirm('Leave this order and return to the walk-in counter?','Leave this order?'))return;
+        if (!selectedId) { cart.splice(0); Object.assign(draft, { customer:'',payment:'Cash',cash:'' }); } resetSelection(); rerender();
       };
       if (!selectedId) {
         $('orderCustomer').oninput = event => { draft.customer = event.target.value; };
-        $('orderType').onchange = event => { draft.type = event.target.value; };
       }
       if ($('orderCash')) $('orderCash').oninput = event => {
         if (selectedId) onlineCash = event.target.value; else draft.cash = event.target.value;
@@ -80,7 +79,7 @@
         act(async () => {
           if (selectedId) { receipt = await S.recordPayment(selectedId, cash, user()); onlineCash = ''; U.toast('Payment recorded. Preparation status is unchanged.'); }
           else {
-            receipt = await S.counterOrder(cart, { employee:user(),customer:$('orderCustomer').value.trim() || 'Walk-in customer',type:$('orderType').value,payment:$('orderPayment').value,paid:Number(cash) });
+            receipt = await S.counterOrder(cart, { employee:user(),customer:$('orderCustomer').value.trim() || 'Walk-in customer',payment:$('orderPayment').value,paid:Number(cash) });
             cart.splice(0); draft.customer = ''; draft.cash = ''; U.toast('Walk-in order saved.');
           }
         });
@@ -113,7 +112,7 @@
       queue.innerHTML = queueHTML();
       queue.querySelectorAll('[data-select-order]').forEach(b => b.onclick = () => select(b.dataset.selectOrder));
     }
-    return { render, bind, select, refreshQueue, reset: () => { cart.splice(0); resetSelection(); receipt = null; Object.assign(draft,{customer:'',type:'Takeaway',payment:'Cash',cash:''}); } };
+    return { render, bind, select, refreshQueue, reset: () => { cart.splice(0); resetSelection(); receipt = null; Object.assign(draft,{customer:'',payment:'Cash',cash:''}); } };
   }
   window.IstiloOrdering = { create };
 })();

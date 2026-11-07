@@ -59,7 +59,7 @@ def upload_proof(order_id):
             output=io.BytesIO(); clean.save(output,'JPEG',quality=90)
     except (UnidentifiedImageError,ValueError,OSError,Image.DecompressionBombError,Image.DecompressionBombWarning):
         abort(400,description='Upload a readable PNG, JPEG, or WebP image, at least 100×100 pixels and no more than 12 megapixels.')
-    reference=text(request.form.get('reference',''),80,False).upper()
+    reference=text(request.form.get('reference',''),13,False)
     amount=cents(request.form.get('amount'),True)
     proof_id=uid('PROOF'); filename=proof_id+'.jpg'
     target=Path(current_app.config['UPLOAD_FOLDER'])/filename
@@ -69,11 +69,8 @@ def upload_proof(order_id):
             own_order(order)
             if order['source']!='Customer' or order['status']!='Pending' or order['payment_status'] not in ('Awaiting proof','Rejected'):
                 abort(409,description='This order already has a pending/approved payment or is no longer active.')
-            if not reference:
-                reference=re.sub(r'[^A-Z0-9-]','-',order_id.upper())
-                if len(reference)<8:
-                    reference='ORDER-'+reference
-            if not re.fullmatch(r'[A-Z0-9-]{8,80}',reference): abort(400,description='Enter a valid GCash/Maya transaction reference.')
+            if not reference or not re.fullmatch(r'[0-9]{13}',reference):
+                abort(400,description='Transaction reference must contain exactly 13 numbers.')
             if amount!=order['total_cents']: abort(400,description='The transferred amount must match the order total.')
             if rows('SELECT COUNT(*) AS count FROM payment_proofs WHERE order_id=%s',(order_id,),one=True)['count']>=5:
                 abort(429,description='Too many rejected submissions. Contact the shop.')
