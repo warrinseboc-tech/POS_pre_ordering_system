@@ -1,0 +1,8 @@
+
+
+LOAD DATABASE
+     FROM mysql://root:root123@host.docker.internal:3306/istillo_db
+     INTO postgresql://postgres.enbjwouuckzuialdibyl:Istilo@2026@aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+ 
+ WITH create tables, create indexes,
+      reset sequences, foreign keys;

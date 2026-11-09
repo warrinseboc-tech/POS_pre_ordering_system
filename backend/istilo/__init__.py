@@ -83,6 +83,19 @@ def create_app(overrides=None):
     def index():
         return redirect('/customer/')
 
+    @app.get('/terms-and-conditions', strict_slashes=False)
+    def terms_and_conditions():
+        return send_from_directory(ROOT / 'customer', 'terms-and-conditions.html')
+
+    @app.get('/privacy-policy', strict_slashes=False)
+    def privacy_policy():
+        return send_from_directory(ROOT / 'customer', 'privacy-policy.html')
+
+    @app.get('/customer/agreement.html')
+    @app.get('/customer/customer/agreement.html')
+    def legacy_customer_agreement():
+        return redirect('/terms-and-conditions')
+
     @app.get('/<portal>/')
     @app.get('/<portal>/index.html')
     def portal_page(portal):

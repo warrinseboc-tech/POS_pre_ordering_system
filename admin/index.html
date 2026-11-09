@@ -162,7 +162,14 @@
       <h2>Sales Reports</h2>
       <p>Export sales and expense records.</p>
       <div class="report-controls">
-        <label>Report date <input type="date" id="reportDateFilter"></label>
+        <label>Report period
+          <select id="reportPeriodFilter">
+            <option value="day">Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+          </select>
+        </label>
+        <label>Date in period <input type="date" id="reportDateFilter"></label>
         <label>Crew member
           <select id="reportCrewFilter"><option value="">All crew</option></select>
         </label>

@@ -99,6 +99,7 @@
     editOrderItems:(id,body)=>mutate('/orders/'+id+'/items','PATCH',body),
     punchOrder:id=>mutate('/orders/'+id+'/punch'),
     setStatus:(id,status)=>mutate('/orders/'+id+'/status','POST',{status}),
+    deleteOrder:id=>mutate('/orders/'+encodeURIComponent(id),'DELETE'),
     recordPayment:async(id,paid)=>(await mutate('/orders/'+id+'/cash','POST',{paid})).order,
     login:async(employee,password,role=portal)=>{await mutate('/auth/login','POST',{employee,password,role});return store.user;},
     customerLogin:async(identifier,password)=>(await mutate('/auth/customer/login','POST',{identifier,password})).user,

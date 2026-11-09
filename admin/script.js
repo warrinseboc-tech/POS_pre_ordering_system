@@ -667,18 +667,22 @@ $("expenseForm").addEventListener("submit", async event => {
 
 window.deleteExpense = async function(id) {
   if (!await U.confirm("Are you sure you want to delete this expense?", "Delete expense?", "Yes, delete")) return;
-  expenses = expenses.filter(e => e.id !== id);
-  if (!await save()) return;
-  refresh();
+  await attempt(async () => {
+    if (!expenses.some(expense => expense.id === id)) throw new Error("Expense no longer exists.");
+    await S.mutate("/expenses/"+encodeURIComponent(id),"DELETE");
+    await refresh();
+    notify("Expense deleted.");
+  });
 };
 
 // PRE-ORDER MANAGEMENT
 function renderOrders() {
   $("ordersTable").innerHTML = createTable(
-    ["Order ID","Customer","Total","Status","Action"],
-    preorders.map((o,index) => `
+    ["Order ID","Placed","Customer","Total","Status","Action"],
+    preorders.slice().sort((a,b) => new Date(b.time) - new Date(a.time)).map(o => `
       <tr>
         <td>${escapeHTML(o.id)}</td>
+        <td>${escapeHTML(S.date(o.time))}</td>
         <td>${escapeHTML(o.customer || "Guest")}<small class="order-items">${o.items.map(i => `${i.qty} × ${escapeHTML(i.name)} (${escapeHTML(i.size)}, ${escapeHTML(i.flavor)})`).join('<br>')}</small>${o.notes ? `<small class="order-items">Note: ${escapeHTML(o.notes)}</small>` : ''}</td>
         <td>${money(o.total)}</td>
         <td>${escapeHTML(o.status)}<small class="order-items">${o.payment === 'Cash' || o.collectedAt ? 'Paid' : 'Payment due'}</small></td>
@@ -690,11 +694,24 @@ function renderOrders() {
               </option>
             `).join("")}
           </select>
+          <button class="action danger" type="button" data-delete-order="${escapeHTML(o.id)}">Delete</button>
         </td>
       </tr>
     `)
   );
   $('ordersTable').querySelectorAll('[data-order]').forEach(select => select.onchange = () => updateOrderStatus(select.dataset.order, select.value));
+  $('ordersTable').querySelectorAll('[data-delete-order]').forEach(button => button.onclick = async () => {
+    const order = preorders.find(item => item.id === button.dataset.deleteOrder);
+    if (!order) { notify("Order no longer exists."); return; }
+    if (!await U.confirm(`Permanently delete order ${order.id} and its payment and sales records?`, "Delete order?", "Yes, delete")) return;
+    button.disabled = true;
+    await attempt(async () => {
+      await S.mutate("/orders/"+encodeURIComponent(order.id),"DELETE");
+      await refresh();
+      notify("Order deleted.");
+    });
+    if (button.isConnected) button.disabled = false;
+  });
 }
 
 window.updateOrderStatus = async function(id,status) {
@@ -820,6 +837,47 @@ $("clearAnalyticsFilters").addEventListener("click", () => {
 });
 
 // REPORTS
+function reportDateRange(selectedDate, period) {
+  if (!selectedDate) return null;
+
+  const [year, month, day] = selectedDate.split("-").map(Number);
+  const start = new Date(Date.UTC(year, month - 1, day));
+  if (period === "week") {
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7));
+  } else if (period === "month") {
+    start.setUTCDate(1);
+  }
+
+  const end = new Date(start);
+  if (period === "week") {
+    end.setUTCDate(end.getUTCDate() + 7);
+  } else if (period === "month") {
+    end.setUTCMonth(end.getUTCMonth() + 1);
+  } else {
+    end.setUTCDate(end.getUTCDate() + 1);
+  }
+
+  return {
+    start: start.toISOString().slice(0, 10),
+    end: end.toISOString().slice(0, 10)
+  };
+}
+
+function reportSales() {
+  const selectedCrew = $("reportCrewFilter").value;
+  const dateRange = reportDateRange(
+    $("reportDateFilter").value,
+    $("reportPeriodFilter").value
+  );
+  return transactions.filter(t => {
+    const id = t.collectedBy || t.punchedBy || t.createdBy;
+    const transactionDate = S.today(t.date);
+    const dateMatches = !dateRange ||
+      (transactionDate >= dateRange.start && transactionDate < dateRange.end);
+    return dateMatches && (!selectedCrew || id === selectedCrew);
+  });
+}
+
 function renderReports() {
   const crewFilter = $("reportCrewFilter");
   if (crewFilter.options.length === 1) {
@@ -831,14 +889,7 @@ function renderReports() {
     });
   }
 
-  const selectedCrew = crewFilter.value;
-  const selectedDate = $("reportDateFilter").value;
-  const sales = transactions.filter(t => {
-    const id = t.collectedBy || t.punchedBy || t.createdBy;
-    const dateMatches = !selectedDate || S.today(t.date) === selectedDate;
-    const crewMatches = !selectedCrew || id === selectedCrew;
-    return dateMatches && crewMatches;
-  });
+  const sales = reportSales();
 
   const rows = sales.map(t => ({
     type:"Sale",
@@ -882,25 +933,55 @@ function renderReports() {
 }
 
 $("reportDateFilter").addEventListener("change", renderReports);
+$("reportPeriodFilter").addEventListener("change", renderReports);
 $("reportCrewFilter").addEventListener("change", renderReports);
 $("clearReportFilters").addEventListener("click", () => {
+  $("reportPeriodFilter").value = "day";
   $("reportDateFilter").value = "";
   $("reportCrewFilter").value = "";
   renderReports();
 });
 
 $("exportBtn").addEventListener("click", () => {
-  const selectedCrew = $("reportCrewFilter").value;
-  const selectedDate = $("reportDateFilter").value;
-  const sales = transactions.filter(t => {
-    const id = t.collectedBy || t.punchedBy || t.createdBy;
-    return (!selectedCrew || id === selectedCrew) &&
-      (!selectedDate || S.today(t.date) === selectedDate);
-  });
+  const sales = reportSales();
+  const productSales = new Map();
+  let totalSales = 0;
   const rows = [
-    ["Type","Reference","Date","Amount","Crew Member"],
-    ...sales.map(t => ["Sale",t.id,t.date,t.total,crewName(t)])
+    ["Type","Date","Reference","Product Name","Quantity","Unit Price","Amount","Crew Member","Total of Sales","Best Selling Product"]
   ];
+  sales.forEach(t => {
+    totalSales += Number(t.total || 0);
+    (t.items || []).forEach(item => {
+      const name = item.name || "Unknown Product";
+      const quantity = Number(item.quantity ?? item.qty ?? 0);
+      const unitPrice = Number(item.price || 0);
+      const product = productSales.get(name) || {quantity:0};
+      product.quantity += quantity;
+      productSales.set(name, product);
+      rows.push([
+        "Sale",
+        S.today(t.date),
+        t.id,
+        name,
+        quantity,
+        unitPrice,
+        unitPrice * quantity,
+        crewName(t),
+        "",
+        ""
+      ]);
+    });
+  });
+
+  const bestSelling = [...productSales.entries()]
+    .sort((a,b) => b[1].quantity - a[1].quantity || a[0].localeCompare(b[0]));
+  rows.push([
+    "Summary","","","","","","","",
+    totalSales,
+    bestSelling.length
+      ? `${bestSelling[0][0]} (${bestSelling[0][1].quantity} units)`
+      : "No sales"
+  ]);
 
   const csv = rows.map(row => row.map(value => {
     let cell = String(value ?? "");
@@ -1070,7 +1151,7 @@ function renderPaymentProofs() {
 }
 
 $('adminLoginForm').onsubmit=async event=>{event.preventDefault();try{await S.login($('adminEmployee').value,$('adminPassword').value,'admin');$('adminPassword').value='';$('adminLoginError').textContent='';refresh();}catch(err){$('adminLoginError').textContent=err.message;}};
-$('adminLogout').onclick=async()=>{if(!await U.confirm('Are you sure you want to log out?', 'Log out?', 'Yes, log out'))return;attempt(async()=>{await S.logout();document.querySelectorAll('dialog[open]').forEach(d=>d.close());refresh();});};
+$('adminLogout').onclick=async()=>{if(!await U.confirm('Are you sure you want to log out?', 'Log out?', 'Yes, log out'))return;const button=$('adminLogout');button.disabled=true;try{await S.logout();document.querySelectorAll('dialog[open]').forEach(d=>d.close());$('adminEmployee').value='';$('adminPassword').value='';$('adminLoginError').textContent='';await S.refresh();refresh();}catch(error){notify(error.message);}finally{button.disabled=false;}};
 $('adminMenuToggle').onclick=()=>{const sidebar=$('adminSidebar');const open=sidebar.classList.toggle('open');$('adminMenuToggle').setAttribute('aria-expanded',String(open));};
 document.querySelectorAll('.sidebar .nav').forEach(button=>button.onclick=()=>{button.closest('.sidebar')?.classList.remove('open');$('adminMenuToggle').setAttribute('aria-expanded','false');});
 

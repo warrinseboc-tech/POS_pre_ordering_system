@@ -3,3 +3,5 @@ mysql-connector-python==26.10.0
 python-dotenv==1.2.4
 Pillow==13.0.0
 qrcode[pil]==8.2
+psycopg2-binary
+gunicorn

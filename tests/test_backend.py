@@ -54,6 +54,39 @@ class PortalTests(unittest.TestCase):
         response=self.post(client,'/auth/login',dict(employee=role.upper()+'001',password='Test-Password-2026!',role=role),role)
         self.assertEqual(response.status_code,200)
 
+    def test_customer_order_requires_policy_agreement(self):
+        registration=self.post(self.customer,'/auth/customer/register',dict(
+            name='Policy test',email='policy-'+secrets.token_hex(6)+'@example.com',
+            phone='09'+str(secrets.randbelow(10**9)).zfill(9),
+            password='Policy-Test-Password-2026!',terms=True))
+        self.assertEqual(registration.status_code,201,registration.json)
+        product=next(product for product in self.get(self.customer)['products'] if product['available'])
+        size=product['sizes'][0]
+        item=dict(id=product['id'],size=size['name'],flavor=product['flavors'][0],qty=1,
+                  price=product['price']+size['extra'])
+        data=dict(requestKey='REQ-'+secrets.token_hex(16),source='Customer',payment='GCash',items=[item])
+        self.assertEqual(self.post(self.customer,'/orders',data).status_code,400)
+        data['termsAccepted']=False
+        self.assertEqual(self.post(self.customer,'/orders',data).status_code,400)
+        data['termsAccepted']=True
+        accepted=self.post(self.customer,'/orders',data)
+        self.assertEqual(accepted.status_code,201,accepted.json)
+
+    def test_policy_interfaces_and_legacy_agreement_link(self):
+        for path,title in (
+            ('/terms-and-conditions','Terms and Conditions'),
+            ('/terms-and-conditions/','Terms and Conditions'),
+            ('/privacy-policy','Privacy Policy'),
+            ('/privacy-policy/','Privacy Policy'),
+        ):
+            with self.customer.get(path) as response:
+                self.assertEqual(response.status_code,200)
+                self.assertIn(title.encode(),response.data)
+        for path in ('/customer/agreement.html','/customer/customer/agreement.html'):
+            response=self.customer.get(path)
+            self.assertEqual(response.status_code,302)
+            self.assertEqual(response.headers['Location'],'/terms-and-conditions')
+
     def order(self,method='GCash',source='Customer',client=None,**extra):
         client=client or self.customer;portal='crew' if source=='Counter' else 'customer'
         data=dict(requestKey='REQ-'+secrets.token_hex(16),customer='API test',source=source,payment=method,paid=100,items=[dict(id='C01',size='Medium',flavor='Original',qty=1,price=95)],**extra)

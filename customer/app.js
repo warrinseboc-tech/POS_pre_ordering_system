@@ -3,7 +3,7 @@
   'use strict';
   const S = Istilo, U = IstiloUI, e = S.escape, root = document.getElementById('content');
   let category = null, search = '', cart = [], receipt = null;
-  const checkoutDraft = { customer: '', phone: '', notes: '', payment: 'GCash', reviewed: false };
+  const checkoutDraft = { customer: '', phone: '', notes: '', payment: 'GCash', reviewed: false, termsAccepted: false };
   const pick = U.picker(cart, render);
   const loginDialog = document.getElementById('customerLoginDialog');
   const notificationsDialog = document.getElementById('customerNotificationsDialog');
@@ -66,7 +66,7 @@
     return `<aside class="order-sidebar" id="orderSummary"><div class="card"><div class="sidebar-label"><h3>Your order</h3><span>${cart.reduce((n, i) => n + i.qty, 0)} items</span></div>${U.cartHTML(cart)}<div class="summary-total"><span>Subtotal</span><strong>${S.money(S.total(cart))}</strong></div><div class="summary-total"><span>Total</span><strong class="total">${S.money(S.total(cart))}</strong></div>${page() === 'checkout' && cart.length ? inlineCheckout() : `<button class="primary full" id="toCheckout" ${cart.length ? '' : 'disabled'}>Review & checkout →</button>`}${cart.length ? '<button class="textbutton full" id="clearCart">Clear order</button>' : ''}<p class="notice">Online pickup · GCash or Maya<br>Payment verification is required before the crew prepares your order.</p></div></aside>`;
   }
   function inlineCheckout() {
-    return `<form id="checkoutForm"><div class="pickup-banner"><span aria-hidden="true">PICKUP ONLY</span><strong>Order for pickup only</strong></div><h3>Pickup details</h3><label class="field">Your name<input name="customer" autocomplete="name" maxlength="80" required readonly placeholder="Name for your order"></label><label class="field">Contact number<input name="phone" type="tel" autocomplete="tel" maxlength="20" required readonly placeholder="Contact number"></label><label class="field">Order notes (optional)<textarea name="notes" maxlength="300" placeholder="Requests for the crew"></textarea></label><label class="field">Payment method<select name="payment"><option>GCash</option><option>Maya</option></select></label><label class="checkbox"><input type="checkbox" required>I’ve reviewed the items, options, and total.</label><button class="primary full" style="margin-top:16px">Place pickup order · ${S.money(S.total(cart))}</button><p id="checkoutError" class="error" role="alert"></p><p class="mini-note">Create the order, transfer via your selected wallet, then upload proof for verification.</p></form>`;
+    return `<form id="checkoutForm"><div class="pickup-banner"><span aria-hidden="true">PICKUP ONLY</span><strong>Order for pickup only</strong></div><h3>Pickup details</h3><label class="field">Your name<input name="customer" autocomplete="name" maxlength="80" required readonly placeholder="Name for your order"></label><label class="field">Contact number<input name="phone" type="tel" autocomplete="tel" maxlength="20" required readonly placeholder="Contact number"></label><label class="field">Order notes (optional)<textarea name="notes" maxlength="300" placeholder="Requests for the crew"></textarea></label><label class="field">Payment method<select name="payment"><option>GCash</option><option>Maya</option></select></label><label class="checkbox"><input name="reviewed" type="checkbox" required>I’ve reviewed the items, options, and total.</label><label class="checkbox checkout-agreement"><input name="termsAccepted" type="checkbox" required aria-describedby="checkoutAgreementError"><span>I have read and agree to the <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms and Conditions</a> and <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label><p id="checkoutAgreementError" class="error" role="alert" aria-live="polite"></p><button class="primary full" style="margin-top:16px">Place pickup order · ${S.money(S.total(cart))}</button><p id="checkoutError" class="error" role="alert"></p><p class="mini-note">Create the order, transfer via your selected wallet, then upload proof for verification.</p></form>`;
   }
   function menu() {
     const products = S.products.filter(p => p.category === category && p.name.toLowerCase().includes(search.toLowerCase()));
@@ -135,7 +135,8 @@
     if (existingForm) {
       const values = new FormData(existingForm);
       checkoutDraft.customer = values.get('customer') || ''; checkoutDraft.phone = values.get('phone') || ''; checkoutDraft.notes = values.get('notes') || ''; checkoutDraft.payment = values.get('payment') || 'GCash';
-      checkoutDraft.reviewed = existingForm.querySelector('[type="checkbox"]').checked;
+      checkoutDraft.reviewed = existingForm.elements.reviewed.checked;
+      checkoutDraft.termsAccepted = existingForm.elements.termsAccepted.checked;
     }
     S.syncCart(cart);
     const current = page();
@@ -174,7 +175,15 @@
       for (const name of ['customer', 'phone', 'notes', 'payment']) form.elements[name].value = checkoutDraft[name];
       if (!checkoutDraft.customer && S.customer?.name) form.elements.customer.value = S.customer.name;
       if (!checkoutDraft.phone && S.customer?.phone) form.elements.phone.value = S.customer.phone;
-      form.querySelector('[type="checkbox"]').checked = checkoutDraft.reviewed;
+      form.elements.reviewed.checked = checkoutDraft.reviewed;
+      form.elements.termsAccepted.checked = checkoutDraft.termsAccepted;
+      form.elements.termsAccepted.addEventListener('invalid', () => {
+        document.getElementById('checkoutAgreementError').textContent = 'Please agree to the Terms and Conditions and Privacy Policy before placing your order.';
+      });
+      form.elements.termsAccepted.addEventListener('change', () => {
+        checkoutDraft.termsAccepted = form.elements.termsAccepted.checked;
+        document.getElementById('checkoutAgreementError').textContent = '';
+      });
     }
     if (form) form.onsubmit = async event => {
       event.preventDefault();
@@ -182,10 +191,16 @@
       const values = new FormData(form);
       const name = values.get('customer').trim();
       if (!name) { document.getElementById('checkoutError').textContent = 'Please enter your name.'; return; }
+      if (values.get('termsAccepted') !== 'on') {
+        document.getElementById('checkoutAgreementError').textContent = 'Please agree to the Terms and Conditions and Privacy Policy before placing your order.';
+        form.elements.termsAccepted.focus();
+        return;
+      }
       if (!await U.confirm('Please confirm that you reviewed your items, options, quantity, payment method, and total before placing this order.', 'Place this order?', 'Yes, place order')) return;
       try {
-        receipt = await S.addOrder(cart, { customer: name, phone: values.get('phone').trim(), notes: values.get('notes').trim(), payment: values.get('payment'), source: 'Customer', type: 'Pickup' });
+        receipt = await S.addOrder(cart, { customer: name, phone: values.get('phone').trim(), notes: values.get('notes').trim(), payment: values.get('payment'), source: 'Customer', type: 'Pickup', termsAccepted: values.get('termsAccepted') === 'on' });
         cart.splice(0);
+        checkoutDraft.termsAccepted = false;
         navigate('confirmation');
       } catch (err) { document.getElementById('checkoutError').textContent = err.message; }
     };

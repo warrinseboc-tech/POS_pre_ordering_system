@@ -140,6 +140,8 @@ def save_product():
     return jsonify(product=product_json(rows('SELECT * FROM products WHERE id=%s',(product_id,),one=True)))
 
 
+
+
 @api.patch('/products/<product_id>/availability')
 @require('crew','admin')
 def availability(product_id):
@@ -182,6 +184,8 @@ def create_order():
     if source=='Counter' and (not user or user['role'] not in ('crew','admin')): abort(403)
     if source=='Customer' and (not session.get('customer_id') or not session.get('customer_verified')):
         abort(401, description='Sign in with a verified customer account before placing an order.')
+    if source=='Customer' and data.get('termsAccepted') is not True:
+        abort(400, description='You must agree to the Terms and Conditions and Privacy Policy before placing an order.')
     method = data.get('payment')
     if method not in (('GCash','Maya') if source=='Customer' else ('Cash','Pay at counter')):
         abort(400,description='Online orders require GCash or Maya payment with proof.')
@@ -239,6 +243,30 @@ def edit_order_items(order_id):
         execute('UPDATE orders SET total_cents=%s,updated_at=%s WHERE id=%s',(total,now(),order_id))
         event(order_id,'items_edited',reason,actor()['id'])
     return jsonify(order=order_json(rows('SELECT * FROM orders WHERE id=%s',(order_id,),one=True)))
+
+
+@api.delete('/orders/<order_id>')
+@require('crew','admin')
+def delete_order(order_id):
+    proof_files = []
+    with transaction():
+        order = rows('SELECT * FROM orders WHERE id=%s FOR UPDATE',(order_id,),one=True)
+        if not order or order['source'] != 'Customer':
+            abort(404,description='Customer order not found.')
+        require_online_shift(order)
+        proofs = rows('SELECT storage_name FROM payment_proofs WHERE order_id=%s',(order_id,))
+        proof_files = [Path(current_app.config['UPLOAD_FOLDER'])/proof['storage_name'] for proof in proofs]
+        execute('DELETE FROM payment_references WHERE order_id=%s',(order_id,))
+        execute('DELETE FROM payment_proofs WHERE order_id=%s',(order_id,))
+        execute('DELETE FROM order_events WHERE order_id=%s',(order_id,))
+        execute('DELETE FROM order_items WHERE order_id=%s',(order_id,))
+        execute('DELETE FROM orders WHERE id=%s',(order_id,))
+    for proof_file in proof_files:
+        try:
+            proof_file.unlink(missing_ok=True)
+        except OSError:
+            current_app.logger.exception('Could not remove deleted order payment proof file')
+    return jsonify(ok=True)
 
 
 @api.post('/orders/<order_id>/punch')
