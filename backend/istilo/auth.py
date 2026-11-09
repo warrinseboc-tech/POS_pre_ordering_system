@@ -41,14 +41,14 @@ def login():
     password = text(data.get('password', ''), 200, True)
     bucket = hashlib.sha256(f'{request.remote_addr}:{employee}'.encode()).hexdigest()
     with transaction():
-        execute('INSERT IGNORE INTO login_attempts(bucket,attempts,expires_at) VALUES(%s,0,%s)', (bucket, now() + timedelta(minutes=15)))
+        execute('INSERT INTO login_attempts(bucket,attempts,expires_at) VALUES(%s,0,%s) ON CONFLICT DO NOTHING', (bucket, now() + timedelta(minutes=15)))
         attempt = rows('SELECT * FROM login_attempts WHERE bucket=%s FOR UPDATE', (bucket,), one=True)
         if attempt['expires_at'] < now():
             execute('UPDATE login_attempts SET attempts=0,expires_at=%s WHERE bucket=%s', (now() + timedelta(minutes=15), bucket))
             attempt['attempts'] = 0
         if attempt['attempts'] >= 10:
             abort(429, description='Too many sign-in attempts. Try again in 15 minutes.')
-        user = rows('SELECT * FROM users WHERE employee_id=%s AND role=%s AND active=1', (employee, role), one=True)
+        user = rows('SELECT * FROM users WHERE employee_id=%s AND role=%s AND active=TRUE', (employee, role), one=True)
         valid = bool(user and check_password_hash(user['password_hash'], password))
         if not valid:
             execute('UPDATE login_attempts SET attempts=attempts+1 WHERE bucket=%s', (bucket,))
@@ -112,14 +112,14 @@ def customer_register():
     with transaction():
         # Serialize matching phone registrations without changing legacy phone values.
         phone_lock = digest('registration-phone:' + phone)
-        execute('INSERT IGNORE INTO login_attempts(bucket,attempts,expires_at) VALUES(%s,0,%s)',
+        execute('INSERT INTO login_attempts(bucket,attempts,expires_at) VALUES(%s,0,%s) ON CONFLICT DO NOTHING',
                 (phone_lock, now() + timedelta(minutes=15)))
         rows('SELECT bucket FROM login_attempts WHERE bucket=%s FOR UPDATE', (phone_lock,), one=True)
         existing = rows('SELECT user_id FROM accounts WHERE user_email=%s OR phone=%s LIMIT 1 FOR UPDATE',
                         (email, phone), one=True)
         if existing:
             abort(409, description='An account with that email or phone already exists.')
-        execute('INSERT INTO accounts(password,name,user_email,phone,email_verified) VALUES(%s,%s,%s,%s,0)',
+        execute('INSERT INTO accounts(password,name,user_email,phone,email_verified) VALUES(%s,%s,%s,%s,FALSE)',
                 (generate_password_hash(password), name, email, phone))
         execute('INSERT INTO pending_account_verifications(user_email,phone,password_hash,otp_hash,expires_at,registration_token_hash) '
                 'VALUES(%s,%s,%s,%s,%s,%s)', (email, phone, '', '', now(), digest(token)))
@@ -144,7 +144,7 @@ def customer_verify_email():
             execute('UPDATE pending_account_verifications SET attempts=attempts+1 WHERE user_email=%s', (entry['user_email'],))
             error = ('Incorrect verification code.', 400)
         else:
-            execute('UPDATE accounts SET email_verified=1 WHERE user_email=%s', (entry['user_email'],))
+            execute('UPDATE accounts SET email_verified=TRUE WHERE user_email=%s', (entry['user_email'],))
             execute('DELETE FROM pending_account_verifications WHERE user_email=%s', (entry['user_email'],))
     if error:
         abort(error[1], description=error[0])
@@ -189,7 +189,7 @@ def customer_reset_password():
         abort(404, description='No account matches that email or phone number.')
     token = secrets.token_urlsafe(32)
     with transaction():
-        execute('INSERT IGNORE INTO password_change_verifications(user_email,token_hash,password_hash,otp_hash,expires_at,last_sent_at) '
+        execute('INSERT INTO password_change_verifications(user_email,token_hash,password_hash,otp_hash,expires_at,last_sent_at) '
                 'VALUES(%s,%s,%s,%s,%s,%s)', (account['user_email'], '', '', '', now(), now()-timedelta(seconds=61)))
         entry = rows('SELECT * FROM password_change_verifications WHERE user_email=%s FOR UPDATE', (account['user_email'],), one=True)
         remaining = 60 - (now()-entry['last_sent_at']).total_seconds()

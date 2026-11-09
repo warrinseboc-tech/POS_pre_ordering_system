@@ -12,6 +12,8 @@ from .db import connect, execute, rows, transaction
 
 
 def initialize(app, seed=True):
+    if app.config.get("DATABASE_URL"):
+        raise click.ClickException("Supabase schema is imported using PostgreSQL SQL Editor; do not run MySQL init-db.")
     name=app.config['DB_NAME']
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,63}',name): raise ValueError('Invalid database name')
     connection=connect(database=False)
@@ -50,6 +52,8 @@ def register_commands(app):
     @app.cli.command('upgrade-password-otp')
     def upgrade_password_otp():
         """Add customer password OTP storage without altering existing accounts."""
+        if app.config.get('DATABASE_URL'):
+            raise click.ClickException('MySQL OTP migration is not compatible with PostgreSQL; import the PostgreSQL schema instead.')
         source = (Path(__file__).parents[1] / 'database' / 'password_otp.sql').read_text(encoding='utf-8')
         with transaction():
             for statement in source.split(';'):
@@ -60,6 +64,8 @@ def register_commands(app):
     @app.cli.command('upgrade-email-otp')
     def upgrade_email_otp():
         """Apply the additive registration OTP migration to the configured database."""
+        if app.config.get("DATABASE_URL"):
+            raise click.ClickException("MySQL email OTP migration is not compatible with PostgreSQL; import the PostgreSQL schema instead.")
         connection = connect()
         cursor = connection.cursor()
         try:

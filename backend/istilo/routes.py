@@ -20,7 +20,7 @@ TRANSITIONS = {'Pending': ['Preparing', 'Cancelled'], 'Preparing': ['Ready', 'Ca
 
 def product_json(p):
     return dict(id=p['id'], name=p['name'], category=p['category'], description=p['description'], price=p['price_cents']/100,
-                flavors=json.loads(p['flavors']), sizes=[dict(name=s['name'], extra=s['extra_cents']/100) for s in json.loads(p['sizes'])], icon=p['icon'], imageUrl=p.get('image_url',''),
+                flavors=(p['flavors'] if isinstance(p['flavors'], list) else json.loads(p['flavors'])), sizes=[dict(name=s['name'], extra=s['extra_cents']/100) for s in (p['sizes'] if isinstance(p['sizes'], list) else json.loads(p['sizes']))], icon=p['icon'], imageUrl=p.get('image_url',''),
                 imagePosition=p.get('image_position','center'), imageScale=float(p.get('image_scale') or 1), available=bool(p['available']))
 
 
@@ -49,7 +49,7 @@ def state():
     user = actor()
     customer = None
     if request.headers.get('X-Portal') == 'customer' and session.get('customer_id') and session.get('customer_verified'):
-        customer_row = rows('SELECT * FROM accounts WHERE user_id=%s AND email_verified=1',
+        customer_row = rows('SELECT * FROM accounts WHERE user_id=%s AND email_verified=TRUE',
                             (session['customer_id'],), one=True)
         if customer_row:
             customer = dict(id=customer_row['user_id'], email=customer_row['user_email'],
@@ -70,7 +70,7 @@ def state():
         shifts = [dict(id=s['id'],employee=user['employee_id'],start=iso(s['start_at']),end=iso(s['end_at']),note=s['note']) for s in rows('SELECT * FROM shifts WHERE employee_id=%s ORDER BY start_at', (user['id'],))]
         if user['role'] == 'admin':
             expenses = [dict(id=x['id'],name=x['name'],category=x['category'],amount=x['amount_cents']/100,date=str(x['expense_date']),description=x['description']) for x in rows('SELECT * FROM expenses ORDER BY expense_date')]
-            inventory = [dict(id=i['id'],name=i['name'],category=i['category'],unit=i['unit'],quantity=float(i['quantity']),minimum=float(i['minimum']),active=bool(i['active']),updatedAt=iso(i['updated_at'])) for i in rows('SELECT * FROM inventory_items WHERE active=1 ORDER BY category,name')]
+            inventory = [dict(id=i['id'],name=i['name'],category=i['category'],unit=i['unit'],quantity=float(i['quantity']),minimum=float(i['minimum']),active=bool(i['active']),updatedAt=iso(i['updated_at'])) for i in rows('SELECT * FROM inventory_items WHERE active=TRUE ORDER BY category,name')]
             inventory_adjustments = [dict(id=a['id'],itemId=a['item_id'],itemName=rows('SELECT name FROM inventory_items WHERE id=%s',(a['item_id'],),one=True)['name'],change=float(a['change_amount']),quantityAfter=float(a['quantity_after']),adjustedBy=a['adjusted_by'],time=iso(a['created_at'])) for a in rows('SELECT * FROM inventory_adjustments ORDER BY created_at DESC LIMIT 100')]
     return jsonify(csrf=session['csrf'], user=user_json(user), customer=customer, onShift=bool(active_shift(user) or (user and user['role'] == 'crew')), products=products, orders=[order_json(o) for o in visible_orders(user)],
                    availability={p['id']:p['available'] for p in products}, staff=[user_json(s) for s in staff],
@@ -83,7 +83,7 @@ def state():
 
 @api.get('/health')
 def health():
-    connection = rows('SELECT DATABASE() AS name', one=True)
+    connection = rows('SELECT current_database() AS name', one=True)
     return jsonify(status='ok', database=connection['name'], connected=True)
 
 
@@ -135,7 +135,7 @@ def save_product():
             filename = f'{product_id}-{uuid4().hex}{extension}'
             upload.save(folder / filename)
             image_url = f'/api/product-images/{filename}'
-        execute('INSERT INTO products(id,name,category,description,price_cents,flavors,sizes,icon,image_url,image_position,image_scale) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE name=VALUES(name),category=VALUES(category),description=VALUES(description),price_cents=VALUES(price_cents),flavors=VALUES(flavors),sizes=VALUES(sizes),icon=VALUES(icon),image_url=VALUES(image_url),image_position=VALUES(image_position),image_scale=VALUES(image_scale)',
+        execute('INSERT INTO products(id,name,category,description,price_cents,flavors,sizes,icon,image_url,image_position,image_scale) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,category=EXCLUDED.category,description=EXCLUDED.description,price_cents=EXCLUDED.price_cents,flavors=EXCLUDED.flavors,sizes=EXCLUDED.sizes,icon=EXCLUDED.icon,image_url=EXCLUDED.image_url,image_position=EXCLUDED.image_position,image_scale=EXCLUDED.image_scale',
                 (product_id,name,category,text(data.get('description',''),2000),price,json.dumps(flavors),json.dumps(sizes),ICONS[category],image_url,image_position,image_scale))
     return jsonify(product=product_json(rows('SELECT * FROM products WHERE id=%s',(product_id,),one=True)))
 
@@ -165,8 +165,8 @@ def validated_items(items, existing=()):
         qty = item.get('qty')
         if isinstance(qty,bool) or not isinstance(qty,int) or not 1 <= qty <= 99: abort(400,description='Quantity must be 1–99.')
         selected_type = item.get('size')
-        size = {'name': selected_type, 'extra_cents': 0} if selected_type in ('Hot','Ice') or (p['category']=='Snacks' and selected_type=='Regular') else next((s for s in json.loads(p['sizes']) if s['name']==selected_type),None)
-        if not size or item.get('flavor') not in json.loads(p['flavors']): abort(400,description='Choose valid product options.')
+        size = {'name': selected_type, 'extra_cents': 0} if selected_type in ('Hot','Ice') or (p['category']=='Snacks' and selected_type=='Regular') else next((s for s in (p['sizes'] if isinstance(p['sizes'], list) else json.loads(p['sizes'])) if s['name']==selected_type),None)
+        if not size or item.get('flavor') not in (p['flavors'] if isinstance(p['flavors'], list) else json.loads(p['flavors'])): abort(400,description='Choose valid product options.')
         unit = historical.get((p['id'],size['name'],item['flavor']), p['price_cents'] + size['extra_cents'])
         if 'price' not in item or cents(item['price']) != unit: abort(409,description='The menu price changed. Review your cart and try again.')
         total += unit * qty
@@ -192,7 +192,7 @@ def create_order():
     customer_name = ''
     customer_phone = ''
     if source == 'Customer':
-        account = rows('SELECT name,user_email,phone FROM accounts WHERE user_id=%s AND email_verified=1',
+        account = rows('SELECT name,user_email,phone FROM accounts WHERE user_id=%s AND email_verified=TRUE',
                        (session['customer_id'],), one=True)
         if not account or not account['name'] or not account['phone']:
             abort(400, description='Add your name and contact number to your Profile before placing an order.')
@@ -490,7 +490,7 @@ def expense():
     except (ValueError,TypeError): abort(400,description='Enter a valid expense date.')
     expense_id=data.get('id') or uid('EXP')
     with transaction():
-        execute('INSERT INTO expenses(id,name,category,amount_cents,expense_date,description,created_by) VALUES(%s,%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE name=VALUES(name),category=VALUES(category),amount_cents=VALUES(amount_cents),expense_date=VALUES(expense_date),description=VALUES(description)',(expense_id,text(data.get('name',''),100,True),text(data.get('category',''),60,True),cents(data.get('amount'),True),day,text(data.get('description',''),500),actor()['id']))
+        execute('INSERT INTO expenses(id,name,category,amount_cents,expense_date,description,created_by) VALUES(%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,category=EXCLUDED.category,amount_cents=EXCLUDED.amount_cents,expense_date=EXCLUDED.expense_date,description=EXCLUDED.description',(expense_id,text(data.get('name',''),100,True),text(data.get('category',''),60,True),cents(data.get('amount'),True),day,text(data.get('description',''),500),actor()['id']))
     return jsonify(ok=True)
 
 

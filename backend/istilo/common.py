@@ -54,7 +54,7 @@ def actor():
     if not hasattr(g, 'actor'):
         portal = request.headers.get('X-Portal')
         user_id = session.get(portal + '_id', '') if portal in ('admin', 'crew') else ''
-        g.actor = rows('SELECT * FROM users WHERE id=%s AND active=1 AND role=%s', (user_id, portal or ''), one=True)
+        g.actor = rows('SELECT * FROM users WHERE id=%s AND active=TRUE AND role=%s', (user_id, portal or ''), one=True)
     return g.actor
 
 

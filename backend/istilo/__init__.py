@@ -5,7 +5,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, redirect, request, send_from_directory, session
-from mysql.connector import Error as DatabaseError, IntegrityError
+from mysql.connector import Error as MySQLDatabaseError, IntegrityError as MySQLIntegrityError
+from psycopg2 import Error as PostgresDatabaseError, IntegrityError as PostgresIntegrityError
 from werkzeug.exceptions import HTTPException
 
 from . import db
@@ -27,6 +28,7 @@ def create_app(overrides=None):
     app = Flask(__name__, static_folder=None, instance_path=str(instance))
     app.config.update(
         SECRET_KEY=os.getenv('SECRET_KEY') or key_file.read_text().strip(),
+        DATABASE_URL=os.getenv('DATABASE_URL', ''),
         DB_HOST=os.getenv('DB_HOST', '127.0.0.1'), DB_PORT=int(os.getenv('DB_PORT', '3306')),
         DB_USER=os.getenv('DB_USER', 'root'), DB_PASSWORD=os.getenv('DB_PASSWORD', ''),
         DB_NAME=os.getenv('PORTAL_DB_NAME', 'istillo_db'),
@@ -68,12 +70,14 @@ def create_app(overrides=None):
     def http_error(error):
         return jsonify(error=error.description), error.code
 
-    @app.errorhandler(IntegrityError)
+    @app.errorhandler(MySQLIntegrityError)
+    @app.errorhandler(PostgresIntegrityError)
     def conflict(error):
         db.get_db().rollback()
         return jsonify(error='This reference, image, employee ID, or request already exists. Refresh before retrying.'), 409
 
-    @app.errorhandler(DatabaseError)
+    @app.errorhandler(MySQLDatabaseError)
+    @app.errorhandler(PostgresDatabaseError)
     def database_error(error):
         app.logger.exception('Database request failed')
         return jsonify(error='Database unavailable. Check the database setup and try again.'), 503

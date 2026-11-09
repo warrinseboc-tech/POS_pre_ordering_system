@@ -93,7 +93,7 @@ def proof_image(proof_id):
     proof=rows('SELECT * FROM payment_proofs WHERE id=%s',(proof_id,),one=True)
     if not proof: abort(404)
     order=rows('SELECT * FROM orders WHERE id=%s',(proof['order_id'],),one=True)
-    reviewer=rows("SELECT id FROM users WHERE id=%s AND role='crew' AND active=1",(session.get('crew_id',''),),one=True)
+    reviewer=rows("SELECT id FROM users WHERE id=%s AND role='crew' AND active=TRUE",(session.get('crew_id',''),),one=True)
     reviewer = reviewer and active_shift(dict(id=reviewer['id'],role='crew'))
     if not reviewer and order['customer_token'] != session.get('customer_token'):
         abort(403 if session.get('admin_id') else 404)

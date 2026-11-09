@@ -21,7 +21,7 @@ def rate_limit(action, limit):
     bucket = digest(f'otp:{action}:{request.remote_addr}')
     blocked = False
     with transaction():
-        execute('INSERT IGNORE INTO login_attempts(bucket,attempts,expires_at) VALUES(%s,0,%s)',
+        execute('INSERT INTO login_attempts(bucket,attempts,expires_at) VALUES(%s,0,%s) ON CONFLICT DO NOTHING',
                 (bucket, now() + timedelta(minutes=15)))
         entry = rows('SELECT * FROM login_attempts WHERE bucket=%s FOR UPDATE', (bucket,), one=True)
         if entry['expires_at'] <= now():
