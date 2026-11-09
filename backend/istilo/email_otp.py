@@ -4,6 +4,8 @@ import hmac
 import secrets
 import smtplib
 import ssl
+import click
+from contextlib import contextmanager
 from datetime import timedelta
 from email.message import EmailMessage
 
@@ -11,6 +13,39 @@ from flask import abort, current_app, request, session
 
 from .common import now
 from .db import execute, rows, transaction
+
+
+def missing_smtp_settings(config):
+    return [key for key in ('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD')
+            if not str(config.get(key) or '').strip()]
+
+
+@contextmanager
+def smtp_connection(config):
+    transport = smtplib.SMTP_SSL if config['SMTP_SSL'] else smtplib.SMTP
+    options = {'context': ssl.create_default_context()} if config['SMTP_SSL'] else {}
+    with transport(config['SMTP_HOST'], config['SMTP_PORT'], timeout=15, **options) as smtp:
+        if not config['SMTP_SSL']:
+            smtp.starttls(context=ssl.create_default_context())
+        smtp.login(config['SMTP_USERNAME'], config['SMTP_PASSWORD'])
+        yield smtp
+
+
+def register_email_commands(app):
+    @app.cli.command('check-smtp')
+    def check_smtp():
+        """Check server email configuration and login without sending an email."""
+        missing = missing_smtp_settings(app.config)
+        if missing:
+            raise click.ClickException('Missing server settings: ' + ', '.join(missing))
+        try:
+            with smtp_connection(app.config):
+                pass
+        except smtplib.SMTPAuthenticationError:
+            raise click.ClickException('SMTP login rejected. Check the sender address and provider App Password.') from None
+        except (OSError, smtplib.SMTPException) as error:
+            raise click.ClickException('SMTP connection failed (' + type(error).__name__ + '). Check the host, port, TLS mode, and hosting network access.') from None
+        click.echo('SMTP connection and authentication successful. No email sent.')
 
 
 def digest(value):
@@ -37,7 +72,7 @@ def rate_limit(action, limit):
 
 def send_code(email, code, purpose='registration'):
     config = current_app.config
-    missing = [key for key in ('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD') if not config.get(key)]
+    missing = missing_smtp_settings(config)
     if missing:
         current_app.logger.error('Email delivery configuration missing: %s', ', '.join(missing))
         raise RuntimeError('Email delivery is not configured. Ask the shop to check its SMTP settings.')
@@ -57,13 +92,7 @@ ISTILO Coffee Shop
         message.set_content(f'Use this code to confirm your ISTILO password change: {code}\n'
                             'This code expires in 5 minutes.\n'
                             'If you did not request a password change, ignore this email. Your password has not changed.\nISTILO Coffee Shop\n')
-    transport = smtplib.SMTP_SSL if config['SMTP_SSL'] else smtplib.SMTP
-    options = {'context': ssl.create_default_context()} if config['SMTP_SSL'] else {}
-    with transport(config['SMTP_HOST'], config['SMTP_PORT'], timeout=15, **options) as smtp:
-        if not config['SMTP_SSL']:
-            smtp.starttls(context=ssl.create_default_context())
-        if config['SMTP_USERNAME']:
-            smtp.login(config['SMTP_USERNAME'], config['SMTP_PASSWORD'])
+    with smtp_connection(config) as smtp:
         smtp.send_message(message)
 
 

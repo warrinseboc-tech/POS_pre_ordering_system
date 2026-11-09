@@ -72,6 +72,24 @@ installations must run the upgrade command, even if they previously ran init-db.
 
 ## Local email configuration
 
+For a deployed server, configure SMTP in that hosting service's environment settings.
+The private local `backend/.env` is ignored by Git and is not included in a deployment.
+Keep `DATABASE_URL` set to the existing Supabase connection URL; SMTP settings are independent.
+Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, and
+`SMTP_SSL` on the server, then restart or redeploy. `SMTP_USER` and `SMTP_FROM_EMAIL`
+are accepted aliases for the username and sender. Port 465 uses `SMTP_SSL=true`;
+port 587 uses `SMTP_SSL=false` (STARTTLS).
+
+Check the environment of the actual running server without sending an email:
+
+```sh
+python -m flask --app backend/app.py check-smtp
+```
+
+The command reports missing variable names, rejected logins, or connection failures
+without printing credentials. Run it on the hosting service too: a successful local
+check does not verify the deployed environment.
+
 Add these values to the existing `backend/.env` (do not commit this file):
 
 ```dotenv

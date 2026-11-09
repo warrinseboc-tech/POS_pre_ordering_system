@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def create_app(overrides=None):
     load_dotenv(ROOT / 'backend' / '.env')
+    load_dotenv(ROOT / '.env')
     instance = ROOT / 'instance'
     instance.mkdir(exist_ok=True)
     key_file = instance / 'session.key'
@@ -47,6 +48,11 @@ def create_app(overrides=None):
     )
     if overrides:
         app.config.update(overrides)
+    from .email_otp import missing_smtp_settings, register_email_commands
+    missing_email = missing_smtp_settings(app.config)
+    if missing_email:
+        app.logger.warning('OTP email unavailable. Set these environment variables on this server: %s', ', '.join(missing_email))
+    register_email_commands(app)
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
     app.teardown_appcontext(db.close_db)
 
