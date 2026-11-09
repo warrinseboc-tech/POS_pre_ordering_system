@@ -25,7 +25,7 @@
     function verificationHTML(order) {
       const proof = S.read('proofs', []).find(p => p.id === order.proof?.id);
       if (!proof || proof.status !== 'Under review') return '<p class="notice">Waiting for a payment receipt.</p>';
-      return `<section class="payment-review"><h3>Verify ${e(proof.wallet)} payment</h3><a href="${e(proof.imageUrl)}" target="_blank" rel="noopener"><img src="${e(proof.imageUrl)}" alt="Customer payment receipt" style="width:100%;max-height:280px;object-fit:contain"></a><p>Submitted reference: <strong>${e(proof.reference)}</strong></p><p>Expected amount: <strong>${S.money(order.total)}</strong></p><form id="crewProofForm"><label class="field">Reference actually received<input name="reference" maxlength="80" required></label><label class="field">Amount actually received<input name="receivedAmount" type="number" min="0.01" step="0.01" required></label><label class="field">Review note / rejection reason<textarea name="note" maxlength="500"></textarea></label><label class="checkbox"><input name="confirmedReceived" type="checkbox" required>I checked the receiving wallet transaction history and confirmed this exact payment.</label><button class="primary full">Approve payment</button><button type="button" class="outline full" id="rejectCrewProof">Reject receipt</button></form></section>`;
+      return `<section class="payment-review"><h3>Verify ${e(proof.wallet)} payment</h3><a href="${e(proof.imageUrl)}" target="_blank" rel="noopener"><img src="${e(proof.imageUrl)}" alt="Customer payment receipt" style="width:100%;max-height:280px;object-fit:contain"></a><p>Submitted reference: <strong>${e(proof.reference)}</strong> <button type="button" class="outline" id="copySubmittedReference" data-reference="${e(proof.reference)}" aria-label="Copy submitted reference number">Copy</button></p><p>Expected amount: <strong>${S.money(order.total)}</strong></p><form id="crewProofForm"><label class="field">Reference actually received<input name="reference" maxlength="80" required></label><label class="field">Amount actually received<input name="receivedAmount" type="number" min="0.01" step="0.01" required></label><label class="field">Review note / rejection reason<textarea name="note" maxlength="500"></textarea></label><label class="checkbox"><input name="confirmedReceived" type="checkbox" required>I checked the receiving wallet transaction history and confirmed this exact payment.</label><button class="primary full">Approve payment</button><button type="button" class="outline full" id="rejectCrewProof">Reject receipt</button></form></section>`;
     }
     function currentHTML() {
       const order = selected(), online = !!order;
@@ -48,6 +48,28 @@
       root.querySelectorAll('[data-punch-product]').forEach(b => b.onclick = () => { if (selectedId) return U.toast('Choose Walk-in to add items to your counter order. The online order stays unchanged.'); pick(b.dataset.punchProduct); });
       U.bindCart(root, cart, rerender);
       const $ = id => root.querySelector('#' + id);
+      if ($('copySubmittedReference')) $('copySubmittedReference').onclick = async event => {
+        const button = event.currentTarget, reference = button.dataset.reference;
+        button.disabled = true;
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(reference);
+          } else {
+            const field = document.createElement('textarea');
+            field.value = reference;
+            field.style.position = 'fixed';
+            field.style.opacity = '0';
+            document.body.appendChild(field);
+            try {
+              field.select();
+              if (!document.execCommand('copy')) throw new Error('Copy failed');
+            } finally { field.remove(); button.focus(); }
+          }
+          U.toast('Reference number copied.');
+        } catch (err) {
+          U.toast('Unable to copy. Select the reference number and copy it manually.');
+        } finally { button.disabled = false; }
+      };
       if ($('startQueueShift')) $('startQueueShift').onclick = () => act(async () => {
         const button = $('startQueueShift'); button.disabled = true;
         try { await S.mutate('/shifts/in'); }
