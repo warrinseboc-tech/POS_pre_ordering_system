@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="../shared/theme.css">
   <script defer src="../shared/store.js"></script>
+  <script defer src="../shared/profile-picture.js"></script>
   <script defer src="../shared/components.js"></script>
   <script defer src="payments.js"></script>
   <script defer src="app.js"></script>
@@ -48,8 +49,9 @@
       <p>Register your account to unlock the menu and place pickup orders.</p>
       <label class="field">Name<input id="customerRegisterName" name="name" autocomplete="name" maxlength="100" required placeholder="Your name"></label>
       <label class="field">Email<input id="customerRegisterEmail" name="email" type="email" autocomplete="email" maxlength="255" required placeholder="you@example.com"></label>
-      <label class="field">Phone number<input id="customerRegisterPhone" name="phone" type="tel" autocomplete="tel" maxlength="20" required placeholder="09XXXXXXXXX"></label>
+      <label class="field">Phone number<input id="customerRegisterPhone" name="phone" type="tel" inputmode="numeric" autocomplete="tel" minlength="12" maxlength="12" pattern="[0-9]{12}" title="Enter exactly 12 digits." required placeholder="Enter 12 digits"></label>
       <label class="field">Password<input id="customerRegisterPassword" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" pattern="(?=.*[A-Za-z])(?=.*[0-9])(?=.*[^A-Za-z0-9\s]).{8,}" required placeholder="8+ characters, letter, number, symbol"></label>
+      <label class="field">Confirm password<input id="customerRegisterConfirmPassword" name="confirm" type="password" autocomplete="new-password" minlength="8" maxlength="200" required placeholder="Re-enter your password"></label>
       <label class="checkbox"><input id="customerTerms" name="terms" type="checkbox" required> I agree to the <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms and Conditions</a> and <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</label>
       <button class="primary full" id="customerRegisterSubmit">Create account</button>
       <button class="textbutton full" id="showCustomerLogin" type="button">Already have an account? Log in</button>

@@ -106,8 +106,8 @@ def customer_register():
         abort(400, description='Password must be at least 8 characters and include a letter, number, and special character.')
     if data.get('terms') is not True:
         abort(400, description='You must agree to the Terms and Agreement.')
-    if not re.fullmatch(r'[0-9+\-\s]{7,20}', phone):
-        abort(400, description='Enter a valid phone number.')
+    if not re.fullmatch(r'[0-9]{12}', phone):
+        abort(400, description='Phone number must contain exactly 12 digits.')
     token = secrets.token_urlsafe(32)
     with transaction():
         # Serialize matching phone registrations without changing legacy phone values.

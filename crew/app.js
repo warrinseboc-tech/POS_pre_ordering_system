@@ -5,6 +5,7 @@
   const pages = [['dashboard','Dashboard','◫'],['pos','Ordering','⊞'],['preorders','Customer orders','&#9776;'],['menu','Menu availability','☕'],['history','Order history','◷'],['profile','Crew profile','♙']];
   let user = null, category = 'All', search = '', historySearch = '', historyDate = '', historyStatus = 'All';
   let cancelId = null;
+  pages.splice(pages.length - 1, 0, ['shift', 'My shift', '◷']);
   user = S.user?.employeeId || null;
   const root = $('content'), orders = () => S.read('orders', []);
   let knownOrders = new Set(orders().map(o => o.id)), popupOrderId = null;
@@ -30,7 +31,23 @@
     catch (err) { $('loginError').textContent = err.message; }
   };
   $('logout').onclick = logout;
-  $('menuToggle').onclick = () => { const open = $('sidebar').classList.toggle('open'); $('menuToggle').setAttribute('aria-expanded', String(open)); };
+  const desktopNavigation = window.matchMedia('(min-width: 651px)');
+  const syncMenuState = () => {
+    const sidebar = $('sidebar');
+    const expanded = desktopNavigation.matches
+      ? !sidebar.closest('.app').classList.contains('sidebar-collapsed')
+      : sidebar.classList.contains('open');
+    $('menuToggle').setAttribute('aria-expanded', String(expanded));
+    sidebar.inert = !expanded;
+  };
+  $('menuToggle').onclick = () => {
+    if (desktopNavigation.matches) $('sidebar').closest('.app').classList.toggle('sidebar-collapsed');
+    else $('sidebar').classList.toggle('open');
+    syncMenuState();
+  };
+  desktopNavigation.addEventListener('change', syncMenuState);
+  new MutationObserver(syncMenuState).observe($('sidebar'), { attributes: true, attributeFilter: ['class'] });
+  syncMenuState();
   function orderRow(o) {
     return `<article class="order"><div><div class="row wrap"><strong>${U.shortId(o.id)} · ${e(o.customer)}</strong>${U.badge(o.status)}</div><p>${o.items.map(i => `${i.qty} × ${e(i.name)}`).join(', ')}</p><small>${S.money(o.total)} · ${S.isPaid(o) ? 'Paid' : 'Unpaid'} · ${o.punchedAt ? 'Punched' : 'Not punched'}</small></div><button class="primary" data-open-order="${e(o.id)}">Open in Ordering →</button></article>`;
   }
@@ -43,7 +60,7 @@
   function categoryTabs() { return `<div class="tabs" role="group" aria-label="Menu categories">${['All',...S.categories.map(c => c.name)].map(c => `<button class="tab ${category === c ? 'active' : ''}" data-category="${c}">${c}</button>`).join('')}</div>`; }
   const filteredProducts = () => S.products.filter(p => (category === 'All' || p.category === category) && p.name.toLowerCase().includes(search.toLowerCase()));
   const menuSearchHTML = () => `<input class="search" id="menuSearch" aria-label="Search menu" value="${e(search)}" placeholder="Find a drink or snack…">`;
-  function pos() { return ordering.render(); }
+  function pos() { return S.onShift ? ordering.render() : shift(); }
   function menu() {
     const list = filteredProducts();
     return `<div class="row between wrap" style="margin-bottom:20px"><div><span class="eyebrow">What’s brewing</span><h2>Menu availability</h2></div>${menuSearchHTML()}</div><p class="queue-caption">Sold-out items cannot be ordered in either portal. Recipe and price editing belong to the administrator.</p>${categoryTabs()}<div class="availability-grid">${list.map(p => `<article class="card availability-row"><div class="row"><span class="availability-icon" aria-hidden="true">${p.icon}</span><div><h3>${e(p.name)}</h3><small>${e(p.category)} · ${S.money(p.price)}</small><br><span class="pill ${S.available(p.id) ? 'ready' : 'cancelled'}">${S.available(p.id) ? 'Available' : 'Sold out'}</span></div></div><button class="outline" data-availability="${p.id}">${S.available(p.id) ? 'Mark sold out' : 'Make available'}</button></article>`).join('')}</div>${list.length ? '' : '<div class="empty">No matching products.</div>'}`;
@@ -56,7 +73,7 @@
     return edit + `<form class="customer-order-action" data-order="${e(order.id)}"><label class="field">Action<select name="status" aria-label="Action for ${e(U.shortId(order.id))}"><option value="">Choose action</option>${actions.map(status => `<option value="${status}">${status === 'Preparing' ? 'Accept and prepare' : status === 'Ready' ? 'Mark ready for pickup' : status === 'Completed' ? 'Complete order' : 'Cancel order'}</option>`).join('')}</select></label><button class="primary">Apply</button></form>`;
   }
   function preorders() {
-    if (!S.onShift) return '<div class="card"><h2>Online access unavailable</h2><p>Contact the administrator to restore access to customer orders.</p></div>';
+    if (!S.onShift) return shift();
     const list = orders().filter(o => o.source === 'Customer').slice().sort((a,b) => new Date(b.time) - new Date(a.time));
     return `<div class="section-head"><h2>Customer orders</h2><a class="outline" href="#pos">Open Ordering</a></div><p class="queue-caption">Review customer receipts, then accept and prepare orders. Status changes also appear on the customer's confirmation screen.</p><div class="card table-wrap"><table class="data-table"><thead><tr><th>Order / placed</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Action</th></tr></thead><tbody>${list.map(o => `<tr><td><strong>${e(U.shortId(o.id))}</strong><small>${S.date(o.time)}</small></td><td>${e(o.customer)}${o.notes ? `<small>Note: ${e(o.notes)}</small>` : ''}</td><td>${o.items.map(i => `${i.qty} &times; ${e(i.name)}<small>${e(i.size)} &middot; ${e(i.flavor)}</small>`).join('<br>')}</td><td>${S.money(o.total)}</td><td>${e(o.paymentStatus)}</td><td>${U.badge(o.status)}</td><td>${customerOrderActions(o)}</td></tr>`).join('')}</tbody></table>${list.length ? '' : '<div class="empty">No customer orders yet.</div>'}</div>`;
   }
@@ -93,7 +110,7 @@
     if ($(id)) $(id).oninput = event => { update(event.target.value); const position = event.target.selectionStart; render(); $(id).focus(); $(id).setSelectionRange(position,position); };
   }
   function bind() {
-    if (current() === 'pos') { ordering.bind(root); return; }
+    if (current() === 'pos' && S.onShift) { ordering.bind(root); return; }
     root.querySelectorAll('[data-open-order]').forEach(b => b.onclick = () => { go('pos'); ordering.select(b.dataset.openOrder); });
     root.querySelectorAll('[data-edit-order]').forEach(button => button.onclick = () => editOrder(button.dataset.editOrder));
     root.querySelectorAll('.customer-order-action').forEach(form => form.onsubmit = event => {

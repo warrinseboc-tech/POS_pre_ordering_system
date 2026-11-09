@@ -30,7 +30,7 @@
       state=next;
       if (emit) {
         const changed=Object.keys(keys).filter(name=>JSON.stringify(previous[name])!==JSON.stringify(next[name]));
-        if ((previous.onShift!==next.onShift || JSON.stringify(previous.user)!==JSON.stringify(next.user)) && !changed.includes('staff')) changed.push('staff');
+        if ((previous.acceptingOrders!==next.acceptingOrders || previous.onShift!==next.onShift || JSON.stringify(previous.user)!==JSON.stringify(next.user)) && !changed.includes('staff')) changed.push('staff');
         if (changed.length) {
           const key=changed.includes('orders')?'orders':changed[0];
           window.dispatchEvent(new StorageEvent('storage',{key:keys[key]}));
@@ -96,6 +96,7 @@
   }
   function syncCart(cart) { cart.forEach(item=>{const p=state.products.find(p=>p.id===item.id);if(!p)return;item.name=p.name;if(['Hot','Ice','Regular'].includes(item.size)){item.price=p.price;}else{const size=p.sizes.find(s=>s.name===item.size);if(size)item.price=Math.round((p.price+size.extra)*100)/100;}}); }
   const store={ categories,keys,read,write,api,refresh,mutate,uid,money,escape,total,available,transitions,syncCart,
+    get acceptingOrders(){return state.acceptingOrders === true;},
     get onShift(){return state.onShift === true;},get products(){return clone(state.products);},get business(){return clone(state.business);},get user(){return clone(state.user);},get customer(){return clone(state.customer);},get wallets(){return clone(state.wallets);},
     staff:()=>read('staff',[]),crewMember:id=>state.staff.find(s=>s.employeeId===id&&s.active),
     saveProduct:async data=>(await mutate('/products','POST',data)).product,

@@ -28,6 +28,7 @@ frame.onload=async()=>{try{
  $('customerRegisterEmail').value='browser@example.com';
  $('customerRegisterPhone').value='09171234567';
  $('customerRegisterPassword').value='Browser-Test!123';$('customerTerms').checked=true;
+ $('customerRegisterConfirmPassword').value='Browser-Test!123';
  $('customerRegisterForm').requestSubmit();
  await wait(()=>!$('customerOTPForm').hidden);
  if(w.Istilo.customer)throw Error('Registration authenticated an unverified customer');

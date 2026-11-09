@@ -10,6 +10,7 @@ module.exports=async({tab,base,delay,runtimeErrors})=>{
  await customer.fill('#customerRegisterEmail','newcustomer@example.com');
  await customer.fill('#customerRegisterPhone','09171234567');
  await customer.fill('#customerRegisterPassword','Browser-Test-Password!');
+ await customer.fill('#customerRegisterConfirmPassword','Browser-Test-Password!');
  await customer.evaluate('document.getElementById("customerTerms").checked=true');
  await submit(customer,'customerRegisterForm');
  await customer.wait('Istilo.customer?.verified===true');

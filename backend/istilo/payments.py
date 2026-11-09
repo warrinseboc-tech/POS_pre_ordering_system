@@ -94,7 +94,8 @@ def proof_image(proof_id):
     if not proof: abort(404)
     order=rows('SELECT * FROM orders WHERE id=%s',(proof['order_id'],),one=True)
     reviewer=rows("SELECT id FROM users WHERE id=%s AND role='crew' AND active=TRUE",(session.get('crew_id',''),),one=True)
-    reviewer = reviewer and active_shift(dict(id=reviewer['id'],role='crew'))
+    owner = order.get('punched_by') or order.get('collected_by') or order.get('created_by')
+    reviewer = reviewer and (not owner or owner == reviewer['id']) and active_shift(dict(id=reviewer['id'],role='crew'))
     if not reviewer and order['customer_token'] != session.get('customer_token'):
         abort(403 if session.get('admin_id') else 404)
     file=Path(current_app.config['UPLOAD_FOLDER'])/proof['storage_name']

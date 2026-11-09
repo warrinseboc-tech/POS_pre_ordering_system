@@ -41,7 +41,7 @@
 <main class="main">
   <header class="topbar">
     <button type="button" id="adminMenuToggle" class="secondary admin-menu-toggle" aria-label="Toggle admin navigation" aria-controls="adminSidebar" aria-expanded="false">☰ Menu</button>
-    <div>
+    <div class="admin-page-heading">
       <h1 id="pageTitle">Dashboard</h1>
       <p>ISTILO Coffee Shop Management System</p>
     </div>
@@ -246,7 +246,7 @@
     <input id="productPrice" type="number" min="0.01" step="0.01" required>
 
     <label>Description</label>
-    <textarea id="productDescription" rows="3"></textarea>
+    <textarea id="productDescription" rows="3" required maxlength="2000"></textarea>
 
     <label for="productFlavors">Flavors (separate with commas)</label>
     <input id="productFlavors" maxlength="300" required placeholder="Original, Vanilla">

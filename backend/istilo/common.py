@@ -80,6 +80,17 @@ def active_shift(user, lock=False):
 
 
 def require_online_shift(order):
+    user = actor()
+    if user and user['role'] == 'admin':
+        return
+    if user and user['role'] == 'crew':
+        if not active_shift(user, lock=True):
+            abort(403, description='Clock in before processing orders.')
+        if order:
+            owner = order.get('punched_by') or order.get('collected_by') or order.get('created_by')
+            if owner and owner != user['id']:
+                abort(403, description='This order is assigned to another crew member.')
+        return
     if order and order['source']=='Customer':
         if not active_shift(actor(),lock=True):
             abort(403,description='Only crew on an active shift can handle online orders. Clock in under My shift.')
@@ -91,6 +102,8 @@ def own_order(order):
         abort(404, description='Order not found.')
     if user and user['role'] == 'admin':
         return
+    if user and user['role'] == 'crew':
+        require_online_shift(order)
     if user and user['role'] == 'crew' and (order['source'] == 'Counter' or order['payment_status'] == 'Verified' and order['released_at']):
         return
     if order['customer_token'] != session.get('customer_token'):

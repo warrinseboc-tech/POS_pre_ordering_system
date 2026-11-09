@@ -130,6 +130,8 @@ def create_app(overrides=None):
     app.register_blueprint(auth, url_prefix='/api')
     app.register_blueprint(api, url_prefix='/api')
     app.register_blueprint(payments, url_prefix='/api')
+    from .avatars import avatars
+    app.register_blueprint(avatars, url_prefix='/api')
     from .setup import register_commands
     register_commands(app)
     return app

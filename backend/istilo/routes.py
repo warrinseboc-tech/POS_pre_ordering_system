@@ -40,8 +40,20 @@ def visible_orders(user):
     if user and user['role'] == 'admin':
         return rows('SELECT * FROM orders ORDER BY created_at')
     if user and user['role'] == 'crew':
-        return rows('SELECT * FROM orders ORDER BY created_at')
+        return rows('''SELECT o.* FROM orders o WHERE
+            ((o.created_by=%s OR o.collected_by=%s OR o.punched_by=%s
+              OR EXISTS (SELECT 1 FROM order_events e WHERE e.order_id=o.id AND e.actor_id=%s))
+             AND (o.status IN ('Completed','Cancelled') OR %s))
+            OR (%s AND o.source='Customer' AND o.status='Pending'
+                AND o.collected_by IS NULL AND o.punched_by IS NULL)
+            ORDER BY o.created_at''', (user['id'], user['id'], user['id'], user['id'],
+                                      bool(active_shift(user)), bool(active_shift(user))))
     return rows('SELECT * FROM orders WHERE customer_token=%s ORDER BY created_at', (session['customer_token'],))
+
+
+def accepting_customer_orders():
+    return bool(rows('''SELECT s.id FROM shifts s JOIN users u ON u.id=s.employee_id
+                        WHERE s.end_at IS NULL AND u.active=TRUE AND u.role='crew' LIMIT 1''', one=True))
 
 
 @api.get('/state')
@@ -57,7 +69,9 @@ def state():
     products = [product_json(p) for p in rows('SELECT * FROM products ORDER BY category,name')]
     staff = rows('SELECT * FROM users ORDER BY role,employee_id') if user and user['role'] == 'admin' else ([user] if user else [])
     proofs = []
-    if user and user['role'] == 'crew':
+    orders = visible_orders(user)
+    visible_ids = {order['id'] for order in orders}
+    if user and user['role'] == 'crew' and active_shift(user):
         proofs = [dict(id=p['id'], orderId=p['order_id'], reference=p['reference_number'], amount=p['amount_cents']/100, wallet=p['wallet'], status=p['status'], time=iso(p['created_at']), note=p['review_note'], imageUrl='/api/payments/proofs/'+p['id']+'/image') for p in rows('SELECT * FROM payment_proofs ORDER BY created_at DESC')]
     inquiries = []
     shifts = []
@@ -72,7 +86,8 @@ def state():
             expenses = [dict(id=x['id'],name=x['name'],category=x['category'],amount=x['amount_cents']/100,date=str(x['expense_date']),description=x['description']) for x in rows('SELECT * FROM expenses ORDER BY expense_date')]
             inventory = [dict(id=i['id'],name=i['name'],category=i['category'],unit=i['unit'],quantity=float(i['quantity']),minimum=float(i['minimum']),active=bool(i['active']),updatedAt=iso(i['updated_at'])) for i in rows('SELECT * FROM inventory_items WHERE active=TRUE ORDER BY category,name')]
             inventory_adjustments = [dict(id=a['id'],itemId=a['item_id'],itemName=rows('SELECT name FROM inventory_items WHERE id=%s',(a['item_id'],),one=True)['name'],change=float(a['change_amount']),quantityAfter=float(a['quantity_after']),adjustedBy=a['adjusted_by'],time=iso(a['created_at'])) for a in rows('SELECT * FROM inventory_adjustments ORDER BY created_at DESC LIMIT 100')]
-    return jsonify(csrf=session['csrf'], user=user_json(user), customer=customer, onShift=bool(active_shift(user) or (user and user['role'] == 'crew')), products=products, orders=[order_json(o) for o in visible_orders(user)],
+    proofs = [proof for proof in proofs if proof['orderId'] in visible_ids]
+    return jsonify(csrf=session['csrf'], user=user_json(user), customer=customer, onShift=bool(active_shift(user)), acceptingOrders=accepting_customer_orders(), products=products, orders=[order_json(o) for o in orders],
                    availability={p['id']:p['available'] for p in products}, staff=[user_json(s) for s in staff],
                    inquiries=inquiries, expenses=expenses, inventory=inventory, inventoryAdjustments=inventory_adjustments, shifts=shifts, proofs=proofs,
                    profiles={user['employee_id']:dict(name=user['name'],email=user['email'])} if user else {},
@@ -97,8 +112,9 @@ def save_product():
     if category not in CATEGORIES:
         abort(400, description='Choose one of the six menu categories.')
     name = text(data.get('name', ''),100,True)
+    description = text(data.get('description', ''),2000,True)
     price = cents(data.get('price'),True)
-    flavors_value = data.get('flavors', ['Original'])
+    flavors_value = data.get('flavors', [])
     if isinstance(flavors_value, str):
         try:
             flavors_value = json.loads(flavors_value)
@@ -108,7 +124,7 @@ def save_product():
     if not isinstance(flavors,list) or not 1 <= len(flavors) <= 20:
         abort(400, description='Provide between one and twenty flavors.')
     flavors = list(dict.fromkeys(text(f,100,True) for f in flavors))
-    extra = cents(data.get('largeExtra',20))
+    extra = cents(data.get('largeExtra') if category != 'Snacks' else data.get('largeExtra', 0))
     sizes = [dict(name='Regular',extra_cents=0)] if category=='Snacks' else [dict(name='Hot',extra_cents=0),dict(name='Ice',extra_cents=0)]
     image_position = data.get('imagePosition', 'center')
     if image_position not in ('center','top','bottom','left','right','top left','top right','bottom left','bottom right'):
@@ -119,11 +135,16 @@ def save_product():
         image_scale = 1
     image_scale = max(1, min(2.5, image_scale))
     product_id = data.get('id') or uid('P')
+    upload = request.files.get('image')
+    if not data.get('id') and not (upload and upload.filename):
+        abort(400, description='Choose a product image before saving.')
     with transaction():
         if data.get('id') and not rows('SELECT id FROM products WHERE id=%s FOR UPDATE',(product_id,),one=True):
             abort(404)
         existing = rows('SELECT image_url,image_position,image_scale FROM products WHERE id=%s',(product_id,),one=True) if data.get('id') else None
         image_url = existing['image_url'] if existing else ''
+        if not image_url and not (upload and upload.filename):
+            abort(400, description='Choose a product image before saving.')
         upload = request.files.get('image')
         if upload and upload.filename:
             allowed = {'.jpg','.jpeg','.png','.webp'}
@@ -136,7 +157,7 @@ def save_product():
             upload.save(folder / filename)
             image_url = f'/api/product-images/{filename}'
         execute('INSERT INTO products(id,name,category,description,price_cents,flavors,sizes,icon,image_url,image_position,image_scale) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name,category=EXCLUDED.category,description=EXCLUDED.description,price_cents=EXCLUDED.price_cents,flavors=EXCLUDED.flavors,sizes=EXCLUDED.sizes,icon=EXCLUDED.icon,image_url=EXCLUDED.image_url,image_position=EXCLUDED.image_position,image_scale=EXCLUDED.image_scale',
-                (product_id,name,category,text(data.get('description',''),2000),price,json.dumps(flavors),json.dumps(sizes),ICONS[category],image_url,image_position,image_scale))
+                (product_id,name,category,description,price,json.dumps(flavors),json.dumps(sizes),ICONS[category],image_url,image_position,image_scale))
     return jsonify(product=product_json(rows('SELECT * FROM products WHERE id=%s',(product_id,),one=True)))
 
 
@@ -182,6 +203,8 @@ def create_order():
     source = data.get('source','Customer')
     if source not in ('Customer','Counter'): abort(400)
     if source=='Counter' and (not user or user['role'] not in ('crew','admin')): abort(403)
+    if source=='Counter' and user['role']=='crew' and not active_shift(user):
+        abort(403, description='Clock in before processing orders.')
     if source=='Customer' and (not session.get('customer_id') or not session.get('customer_verified')):
         abort(401, description='Sign in with a verified customer account before placing an order.')
     if source=='Customer' and data.get('termsAccepted') is not True:
@@ -206,6 +229,8 @@ def create_order():
         if previous:
             own_order(previous)
             return jsonify(order=order_json(previous))
+        if source == 'Customer' and not accepting_customer_orders():
+            abort(409, description='Online ordering is unavailable while no crew member is clocked in. Please try again later.')
         item_rows, total = validated_items(items)
         paid = cents(data.get('paid',0)) if method=='Cash' else 0
         if method=='Cash' and paid < total: abort(400,description='Cash received must cover the total.')

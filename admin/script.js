@@ -289,6 +289,7 @@ function renderProducts() {
 $("addProductBtn").addEventListener("click", () => {
   $("productForm").reset();
   $("editProductId").value = "";
+  $("productImage").required = true;
   $("productFormTitle").textContent = "Add Product";
   $("productImagePreview").textContent = "No image selected";
   $("productImagePreview").classList.remove("has-image");
@@ -309,6 +310,8 @@ window.editProduct = async function(id) {
   if (!p) return;
 
   $("editProductId").value = p.id;
+  $("productImage").value = '';
+  $("productImage").required = !p.imageUrl;
   $("productName").value = p.name;
   $("productCategory").value = p.category;
   $("productDescription").value = p.description || "";
@@ -392,6 +395,23 @@ $("productForm").addEventListener("submit", async event => {
   const name = $("productName").value.trim();
   const price = Number($("productPrice").value);
   const id = $("editProductId").value;
+  if (!$("productForm").reportValidity()) return;
+  if (!$("productDescription").value.trim()) {
+    notify('Enter a product description.');
+    $("productDescription").focus();
+    return;
+  }
+  const flavors = $('productFlavors').value.split(',').map(value => value.trim());
+  if (flavors.length > 20 || flavors.some(value => !value || value.length > 100)) {
+    notify('Enter between one and twenty flavors, without empty entries (maximum 100 characters each).');
+    $('productFlavors').focus();
+    return;
+  }
+  if (!$("productImagePreview").querySelector('img')) {
+    notify('Choose a product image before saving.');
+    $("productImage").focus();
+    return;
+  }
 
   if (!name || !Number.isFinite(price) || price <= 0) {
     notify("Enter a valid product name and price.");
@@ -404,12 +424,13 @@ $("productForm").addEventListener("submit", async event => {
   data.append('description', $("productDescription").value.trim());
   data.append('price', String(price));
   if (id) data.append('id', id);
-  data.append('flavors', JSON.stringify($('productFlavors').value.split(',')));
+  data.append('flavors', JSON.stringify(flavors));
   data.append('largeExtra', String(Number($('productLargeExtra').value)));
   data.append('imageScale', String(Number($("productImageScale").value) / 100));
 
   attempt(async () => {
     const croppedImage = await createCroppedProductImage();
+    if (!croppedImage) throw new Error('The product image is not ready. Select an image and try again.');
     if (croppedImage) data.append('image', croppedImage, 'product.jpg');
     const product = await S.saveProduct(data);
     const availability = S.read('availability', {});

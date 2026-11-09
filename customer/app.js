@@ -8,6 +8,79 @@
   const checkoutDraft = { customer: '', phone: '', notes: '', payment: 'GCash', reviewed: false, termsAccepted: false };
   const pick = U.picker(cart, render);
   const loginDialog = document.getElementById('customerLoginDialog');
+  const registerPhone = document.getElementById('customerRegisterPhone');
+  registerPhone.addEventListener('input', () => {
+    registerPhone.value = registerPhone.value.replace(/[^0-9]/g, '').slice(0, 12);
+  });
+  loginDialog.querySelectorAll('input[type="password"]').forEach(input => {
+    const wrapper = document.createElement('span');
+    wrapper.className = 'password-control';
+    input.before(wrapper);
+    wrapper.append(input);
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'password-toggle';
+    toggle.textContent = 'Show';
+    toggle.setAttribute('aria-controls', input.id);
+    toggle.setAttribute('aria-label', 'Show ' + input.closest('label').childNodes[0].textContent.trim().toLowerCase());
+    toggle.setAttribute('aria-pressed', 'false');
+    const hide = () => {
+      input.type = 'password';
+      toggle.textContent = 'Show';
+      toggle.setAttribute('aria-pressed', 'false');
+      toggle.setAttribute('aria-label', toggle.getAttribute('aria-label').replace(/^Hide/, 'Show'));
+    };
+    toggle.addEventListener('click', () => {
+      if (input.type === 'text') return hide();
+      input.type = 'text';
+      toggle.textContent = 'Hide';
+      toggle.setAttribute('aria-pressed', 'true');
+      toggle.setAttribute('aria-label', toggle.getAttribute('aria-label').replace(/^Show/, 'Hide'));
+    });
+    input.form.addEventListener('reset', hide);
+    loginDialog.addEventListener('close', hide);
+    wrapper.append(toggle);
+  });
+  ['customerRegisterForm', 'customerForgotForm'].forEach(id => {
+    const form = document.getElementById(id);
+    const password = form.elements.namedItem('password');
+    const confirm = form.elements.namedItem('confirm');
+    const requirements = document.createElement('ul');
+    requirements.className = 'password-requirements';
+    requirements.id = password.id + 'Requirements';
+    const checks = [
+      ['At least 8 characters', value => value.length >= 8],
+      ['A letter (A–Z)', value => /[A-Za-z]/.test(value)],
+      ['A number (0–9)', value => /[0-9]/.test(value)],
+      ['A special character (e.g. !@#)', value => /[^A-Za-z0-9\s]/.test(value)]
+    ];
+    const items = checks.map(() => requirements.appendChild(document.createElement('li')));
+    password.closest('label').after(requirements);
+    password.setAttribute('aria-describedby', requirements.id);
+    const match = document.createElement('p');
+    match.className = 'password-match';
+    match.id = confirm.id + 'Match';
+    match.setAttribute('aria-live', 'polite');
+    confirm.closest('label').after(match);
+    confirm.setAttribute('aria-describedby', match.id);
+    const update = () => {
+      const valid = checks.map(([label, check], index) => {
+        const passed = check(password.value);
+        items[index].textContent = (passed ? '✓ ' : '○ ') + label;
+        items[index].classList.toggle('met', passed);
+        return passed;
+      }).every(Boolean);
+      password.setCustomValidity(password.value && !valid ? 'Use at least 8 characters, including a letter, number, and special character.' : '');
+      const matches = password.value === confirm.value;
+      confirm.setCustomValidity(confirm.value && !matches ? 'Passwords do not match.' : '');
+      match.textContent = confirm.value ? (matches ? 'Passwords match.' : 'Passwords do not match.') : '';
+      match.classList.toggle('met', !!confirm.value && matches);
+    };
+    password.addEventListener('input', update);
+    confirm.addEventListener('input', update);
+    form.addEventListener('reset', () => setTimeout(update, 0));
+    update();
+  });
   const notificationsDialog = document.getElementById('customerNotificationsDialog');
   let otpPending = false, resendDeadline = 0, resendBusy = false;
   let otpMode = 'registration';
@@ -151,6 +224,7 @@
     return `<aside class="order-sidebar" id="orderSummary"><div class="card"><div class="sidebar-label"><h3>Your order</h3><span>${cart.reduce((n, i) => n + i.qty, 0)} items</span></div>${U.cartHTML(cart)}<div class="summary-total"><span>Subtotal</span><strong>${S.money(S.total(cart))}</strong></div><div class="summary-total"><span>Total</span><strong class="total">${S.money(S.total(cart))}</strong></div>${page() === 'checkout' && cart.length ? inlineCheckout() : `<button class="primary full" id="toCheckout" ${cart.length ? '' : 'disabled'}>Review & checkout →</button>`}${cart.length ? '<button class="textbutton full" id="clearCart">Clear order</button>' : ''}<p class="notice">Online pickup · GCash or Maya<br>Payment verification is required before the crew prepares your order.</p></div></aside>`;
   }
   function inlineCheckout() {
+    if (!S.acceptingOrders) return '<div class="notice" role="status">Online ordering is currently unavailable. A crew member must be clocked in before you can place an order. Please try again later.</div>';
     return `<form id="checkoutForm"><div class="pickup-banner"><span aria-hidden="true">PICKUP ONLY</span><strong>Order for pickup only</strong></div><h3>Pickup details</h3><label class="field">Your name<input name="customer" autocomplete="name" maxlength="80" required readonly placeholder="Name for your order"></label><label class="field">Contact number<input name="phone" type="tel" autocomplete="tel" maxlength="20" required readonly placeholder="Contact number"></label><label class="field">Order notes (optional)<textarea name="notes" maxlength="300" placeholder="Requests for the crew"></textarea></label><label class="field">Payment method<select name="payment"><option>GCash</option><option>Maya</option></select></label><label class="checkbox"><input name="reviewed" type="checkbox" required>I’ve reviewed the items, options, and total.</label><label class="checkbox checkout-agreement"><input name="termsAccepted" type="checkbox" required aria-describedby="checkoutAgreementError"><span>I have read and agree to the <a href="/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms and Conditions</a> and <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label><p id="checkoutAgreementError" class="error" role="alert" aria-live="polite"></p><button class="primary full" style="margin-top:16px">Place pickup order · ${S.money(S.total(cart))}</button><p id="checkoutError" class="error" role="alert"></p><p class="mini-note">Create the order, transfer via your selected wallet, then upload proof for verification.</p></form>`;
   }
   function menu() {
@@ -400,6 +474,11 @@
     const form = event.currentTarget;
     const values = new FormData(form);
     document.getElementById('customerRegisterError').textContent = '';
+    if (values.get('password') !== values.get('confirm')) {
+      document.getElementById('customerRegisterError').textContent = 'Passwords do not match.';
+      document.getElementById('customerRegisterConfirmPassword').focus();
+      return;
+    }
     const button = document.getElementById('customerRegisterSubmit');
     button.disabled = true;
     button.textContent = 'Sending verification code…';
@@ -460,6 +539,12 @@
     navigate('tracking');
   };
   window.addEventListener('hashchange', () => { render(); root.focus(); window.scrollTo(0, 0); });
+  let lastAcceptingOrders = S.acceptingOrders;
+  window.addEventListener('istilo:updated', () => {
+    if (lastAcceptingOrders === S.acceptingOrders) return;
+    lastAcceptingOrders = S.acceptingOrders;
+    if (page() === 'checkout') render();
+  });
   window.addEventListener('storage', event => {
     if (!Object.values(S.keys).includes(event.key)) return;
     // Preserve fields while someone is typing into checkout or contact forms.
