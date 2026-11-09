@@ -80,16 +80,6 @@ Set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM`, and
 are accepted aliases for the username and sender. Port 465 uses `SMTP_SSL=true`;
 port 587 uses `SMTP_SSL=false` (STARTTLS).
 
-Check the environment of the actual running server without sending an email:
-
-```sh
-python -m flask --app backend/app.py check-smtp
-```
-
-The command reports missing variable names, rejected logins, or connection failures
-without printing credentials. Run it on the hosting service too: a successful local
-check does not verify the deployed environment.
-
 Add these values to the existing `backend/.env` (do not commit this file):
 
 ```dotenv

@@ -2,27 +2,15 @@
 import hashlib
 import hmac
 import secrets
-import json
-import os
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError, URLError
-import click
+import smtplib
+import ssl
 from datetime import timedelta
+from email.message import EmailMessage
 
 from flask import abort, current_app, request, session
 
 from .common import now
 from .db import execute, rows, transaction
-
-
-def register_email_commands(app):
-    @app.cli.command('check-email')
-    def check_email():
-        """Check Resend configuration without sending a message."""
-        missing = [key for key in ('RESEND_API_KEY', 'EMAIL_FROM') if not os.getenv(key)]
-        if missing:
-            raise click.ClickException('Missing environment variables: ' + ', '.join(missing))
-        click.echo('Resend settings present. No email sent; domain and API key not validated.')
 
 
 def digest(value):
@@ -47,45 +35,36 @@ def rate_limit(action, limit):
         abort(429, description='Too many verification requests. Try again in 15 minutes.')
 
 
-class EmailDeliveryError(Exception):
-    pass
-
-
 def send_code(email, code, purpose='registration'):
-    api_key = os.getenv('RESEND_API_KEY', '').strip()
-    sender = os.getenv('EMAIL_FROM', '').strip()
-    if not api_key or not sender:
-        raise EmailDeliveryError('RESEND_API_KEY or EMAIL_FROM is missing.')
-
+    config = current_app.config
+    missing = [key for key in ('SMTP_HOST', 'SMTP_USERNAME', 'SMTP_PASSWORD') if not config.get(key)]
+    if missing:
+        current_app.logger.error('Email delivery configuration missing: %s', ', '.join(missing))
+        raise RuntimeError('Email delivery is not configured. Ask the shop to check its SMTP settings.')
+    message = EmailMessage()
+    message['Subject'] = 'ISTILO Coffee Shop - Password Change Verification' if purpose == 'password' else 'ISTILO Coffee Shop - Email Verification'
+    message['From'] = config['SMTP_FROM'] or config['SMTP_USERNAME']
+    message['To'] = email
+    message.set_content(f'''Welcome to ISTILO Coffee Shop!
+Thank you for creating an account.
+Your verification code is:
+{code}
+This code expires in 5 minutes.
+If you did not register an account, please ignore this email.
+ISTILO Coffee Shop
+''')
     if purpose == 'password':
-        subject = 'ISTILO Coffee Shop - Password Change Verification'
-        body = (f'Use this code to confirm your ISTILO password change: {code}\n'
-                'This code expires in 5 minutes.\n'
-                'If you did not request a password change, ignore this email. '
-                'Your password has not changed.\nISTILO Coffee Shop\n')
-    else:
-        subject = 'ISTILO Coffee Shop - Email Verification'
-        body = (f'Welcome to ISTILO Coffee Shop!\n'
-                'Thank you for creating an account.\n'
-                f'Your verification code is:\n{code}\n'
-                'This code expires in 5 minutes.\n'
-                'If you did not register an account, please ignore this email.\n'
-                'ISTILO Coffee Shop\n')
-
-    payload = json.dumps({'from': sender, 'to': [email],
-                          'subject': subject, 'text': body}).encode('utf-8')
-    req = Request('https://api.resend.com/emails', data=payload,
-                  headers={'Authorization': 'Bearer ' + api_key,
-                           'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urlopen(req, timeout=15) as response:
-            if response.status not in (200, 201, 202):
-                raise EmailDeliveryError(f'Resend returned HTTP {response.status}')
-    except HTTPError as exc:
-        detail = exc.read(500).decode('utf-8', errors='replace')
-        raise EmailDeliveryError(f'Resend rejected email (HTTP {exc.code}): {detail}') from exc
-    except (URLError, OSError) as exc:
-        raise EmailDeliveryError(f'Resend connection failed ({type(exc).__name__})') from exc
+        message.set_content(f'Use this code to confirm your ISTILO password change: {code}\n'
+                            'This code expires in 5 minutes.\n'
+                            'If you did not request a password change, ignore this email. Your password has not changed.\nISTILO Coffee Shop\n')
+    transport = smtplib.SMTP_SSL if config['SMTP_SSL'] else smtplib.SMTP
+    options = {'context': ssl.create_default_context()} if config['SMTP_SSL'] else {}
+    with transport(config['SMTP_HOST'], config['SMTP_PORT'], timeout=15, **options) as smtp:
+        if not config['SMTP_SSL']:
+            smtp.starttls(context=ssl.create_default_context())
+        if config['SMTP_USERNAME']:
+            smtp.login(config['SMTP_USERNAME'], config['SMTP_PASSWORD'])
+        smtp.send_message(message)
 
 
 def issue_code(email, token):
@@ -101,10 +80,18 @@ def issue_code(email, token):
 
 def deliver_code(email, code, purpose='registration'):
     try:
-        send_code(email, code, purpose)
-    except EmailDeliveryError as error:
-        # Abort preserves the existing transaction rollback on failed delivery.
-        current_app.logger.error('Verification email delivery failed: %s', error)
+        if purpose == 'registration':
+            send_code(email, code)
+        else:
+            send_code(email, code, purpose)
+    except RuntimeError as error:
+        abort(503, description=str(error))
+    except smtplib.SMTPAuthenticationError:
+        current_app.logger.error('Verification email failed: SMTP authentication rejected. Check SMTP_USERNAME and SMTP_PASSWORD.')
+        abort(503, description='The email provider rejected the sender login. Ask the shop to check its SMTP settings.')
+    except (OSError, smtplib.SMTPException) as error:
+        # Raising here rolls back the pending account/code, including failed resends.
+        current_app.logger.error('Verification email delivery failed (%s).', type(error).__name__)
         abort(503, description='Could not send the verification email. Please try again shortly.')
 
 

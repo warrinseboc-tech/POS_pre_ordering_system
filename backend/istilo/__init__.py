@@ -16,7 +16,6 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def create_app(overrides=None):
     load_dotenv(ROOT / 'backend' / '.env')
-    load_dotenv(ROOT / '.env')
     instance = ROOT / 'instance'
     instance.mkdir(exist_ok=True)
     key_file = instance / 'session.key'
@@ -33,8 +32,11 @@ def create_app(overrides=None):
         DB_HOST=os.getenv('DB_HOST', '127.0.0.1'), DB_PORT=int(os.getenv('DB_PORT', '3306')),
         DB_USER=os.getenv('DB_USER', 'root'), DB_PASSWORD=os.getenv('DB_PASSWORD', ''),
         DB_NAME=os.getenv('PORTAL_DB_NAME', 'istillo_db'),
-        RESEND_API_KEY=os.getenv('RESEND_API_KEY', ''),
-        EMAIL_FROM=os.getenv('EMAIL_FROM', ''),
+        SMTP_HOST=os.getenv('SMTP_HOST', ''), SMTP_PORT=int(os.getenv('SMTP_PORT', '587')),
+        SMTP_USERNAME=os.getenv('SMTP_USERNAME') or os.getenv('SMTP_USER', ''),
+        SMTP_PASSWORD=os.getenv('SMTP_PASSWORD', ''),
+        SMTP_FROM=os.getenv('SMTP_FROM') or os.getenv('SMTP_FROM_EMAIL', ''),
+        SMTP_SSL=os.getenv('SMTP_SSL', 'false').lower() == 'true',
         UPLOAD_FOLDER=str(instance / 'payment-proofs'), MAX_CONTENT_LENGTH=6 * 1024 * 1024,
         SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_NAME='istilo_portal_session',
@@ -45,12 +47,6 @@ def create_app(overrides=None):
     )
     if overrides:
         app.config.update(overrides)
-    from .email_otp import register_email_commands
-    missing_email = [key for key in ('RESEND_API_KEY', 'EMAIL_FROM')
-                     if not str(app.config.get(key) or '').strip()]
-    if missing_email:
-        app.logger.warning('OTP email unavailable. Set these environment variables on this server: %s', ', '.join(missing_email))
-    register_email_commands(app)
     Path(app.config['UPLOAD_FOLDER']).mkdir(parents=True, exist_ok=True)
     app.teardown_appcontext(db.close_db)
 
