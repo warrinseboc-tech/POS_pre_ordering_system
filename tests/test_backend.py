@@ -4,6 +4,7 @@ import secrets
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
@@ -36,6 +37,12 @@ class PortalTests(unittest.TestCase):
 
     def setUp(self):
         self.customer=self.app.test_client();self.crew=self.app.test_client();self.admin=self.app.test_client()
+        # Order scenarios require an existing verified customer, independently of signup.
+        email='orders-'+secrets.token_hex(6)+'@example.com'
+        with self.app.app_context(), transaction():
+            execute('INSERT INTO accounts(password,name,user_email,phone,email_verified) VALUES(%s,%s,%s,%s,1)',
+                    (generate_password_hash('Test-Password-2026!'),'Order customer',email,'09171234567'))
+        self.assertEqual(self.post(self.customer,'/auth/customer/login',dict(identifier=email,password='Test-Password-2026!')).status_code,200)
         self.login(self.crew,'crew'); self.login(self.admin,'admin')
         self.assertEqual(self.post(self.crew,'/shifts/in',{},'crew').status_code,200)
 
@@ -55,11 +62,15 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(response.status_code,200)
 
     def test_customer_order_requires_policy_agreement(self):
-        registration=self.post(self.customer,'/auth/customer/register',dict(
-            name='Policy test',email='policy-'+secrets.token_hex(6)+'@example.com',
+        email='policy-'+secrets.token_hex(6)+'@example.com'
+        with patch('istilo.email_otp.send_code') as mail:
+            registration=self.post(self.customer,'/auth/customer/register',dict(
+            name='Policy test',email=email,
             phone='09'+str(secrets.randbelow(10**9)).zfill(9),
             password='Policy-Test-Password-2026!',terms=True))
         self.assertEqual(registration.status_code,201,registration.json)
+        self.assertEqual(self.post(self.customer,'/auth/customer/verify-email',dict(code=mail.call_args.args[1])).status_code,200)
+        self.assertEqual(self.post(self.customer,'/auth/customer/login',dict(identifier=email,password='Policy-Test-Password-2026!')).status_code,200)
         product=next(product for product in self.get(self.customer)['products'] if product['available'])
         size=product['sizes'][0]
         item=dict(id=product['id'],size=size['name'],flavor=product['flavors'][0],qty=1,
@@ -89,21 +100,21 @@ class PortalTests(unittest.TestCase):
 
     def order(self,method='GCash',source='Customer',client=None,**extra):
         client=client or self.customer;portal='crew' if source=='Counter' else 'customer'
-        data=dict(requestKey='REQ-'+secrets.token_hex(16),customer='API test',source=source,payment=method,paid=100,items=[dict(id='C01',size='Medium',flavor='Original',qty=1,price=95)],**extra)
+        data=dict(requestKey='REQ-'+secrets.token_hex(16),customer='API test',source=source,payment=method,paid=100,termsAccepted=True,items=[dict(id='C01',size='Ice',flavor='Original',qty=1,price=95)],**extra)
         response=self.post(client,'/orders',data,portal);self.assertEqual(response.status_code,201,response.json);return response.json['order'],data
 
     def proof(self,order,reference=None,raw=None):
         if raw is None:
             image=Image.new('RGB',(220,280),'white');ImageDraw.Draw(image).text((20,20),secrets.token_hex(12),fill='black');output=io.BytesIO();image.save(output,'PNG');raw=output.getvalue()
         token=self.get(self.customer)['csrf']
-        return self.customer.post('/api/orders/'+order['id']+'/proof',data=dict(reference=reference or secrets.token_hex(8),amount=str(order['total']),proof=(io.BytesIO(raw),'receipt.png')),headers={'X-Portal':'customer','X-CSRF-Token':token},content_type='multipart/form-data')
+        return self.customer.post('/api/orders/'+order['id']+'/proof',data=dict(reference=reference or str(secrets.randbelow(10**13)).zfill(13),amount=str(order['total']),proof=(io.BytesIO(raw),'receipt.png')),headers={'X-Portal':'customer','X-CSRF-Token':token},content_type='multipart/form-data')
 
     def test_payment_gate_and_manual_punch(self):
         order,data=self.order();id=order['id']
         self.assertIn(id,[o['id'] for o in self.get(self.crew,'crew')['orders']])
         duplicate=self.post(self.customer,'/orders',data);self.assertEqual(duplicate.json['order']['id'],id)
         self.assertEqual(self.proof(order,raw=b'<svg>bad</svg>').status_code,400)
-        response=self.proof(order,reference='GCASH-123456789');self.assertEqual(response.status_code,201,response.json);proof_id=response.json['proofId']
+        response=self.proof(order,reference='1234567890123');self.assertEqual(response.status_code,201,response.json);proof_id=response.json['proofId']
         self.assertIn(id,[o['id'] for o in self.get(self.crew,'crew')['orders']])
         self.assertEqual(self.post(self.crew,'/orders/'+id+'/punch',{},'crew').status_code,404)
         self.assertTrue(self.get(self.crew,'crew')['proofs'])
@@ -113,7 +124,7 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.app.test_client().get('/api/payments/proofs/'+proof_id+'/image').status_code,404)
         with self.crew.get('/api/payments/proofs/'+proof_id+'/image') as image_response:
             self.assertEqual(image_response.status_code,200)
-        review=dict(decision='approve',reference='GCASH-123456789',receivedAmount='95.00',confirmedReceived=False)
+        review=dict(decision='approve',reference='1234567890123',receivedAmount='95.00',confirmedReceived=False)
         self.assertEqual(self.post(self.crew,'/payments/proofs/'+proof_id+'/review',review,'crew').status_code,400)
         review['confirmedReceived']=True
         self.assertEqual(self.post(self.crew,'/payments/proofs/'+proof_id+'/review',review,'crew').status_code,200)
@@ -161,7 +172,7 @@ class PortalTests(unittest.TestCase):
         def edit(client,role,items,version=None):
             token=self.get(client,role)['csrf']
             return client.patch('/api/orders/'+order['id']+'/items',json=dict(items=items,reason='Customer requested a change',expectedUpdatedAt=version or order['updatedAt']),headers={'X-Portal':role,'X-CSRF-Token':token})
-        items=[dict(id='T01',size='Medium',flavor='Original',qty=1,price=110)]
+        items=[dict(id='T01',size='Ice',flavor='Original',qty=1,price=110)]
         self.assertEqual(edit(self.customer,'customer',items).status_code,401)
         self.assertEqual(edit(self.admin,'admin',items).status_code,403)
         response=edit(self.crew,'crew',items);self.assertEqual(response.status_code,200,response.json)
@@ -171,7 +182,7 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(edit(self.crew,'crew',[dict(items[0],qty=0)]).status_code,400)
         self.assertEqual(edit(self.crew,'crew',[dict(items[0],price=1)]).status_code,409)
         self.assertEqual(self.get(self.app.test_client())['orders'],[])
-        proof=self.proof(order,reference='EDIT-'+secrets.token_hex(8));self.assertEqual(proof.status_code,201)
+        proof=self.proof(order,reference=str(secrets.randbelow(10**13)).zfill(13));self.assertEqual(proof.status_code,201)
         proof_id=proof.json['proofId']
         order=next(o for o in self.get(self.crew,'crew')['orders'] if o['id']==order['id'])
         self.assertEqual(edit(self.crew,'crew',[dict(items[0],qty=2)]).status_code,409)
@@ -193,7 +204,7 @@ class PortalTests(unittest.TestCase):
 
     def test_online_orders_require_active_crew_shift(self):
         order,_=self.order();order_id=order['id']
-        proof=self.proof(order,reference='SHIFT-'+secrets.token_hex(8));self.assertEqual(proof.status_code,201)
+        proof=self.proof(order,reference=str(secrets.randbelow(10**13)).zfill(13));self.assertEqual(proof.status_code,201)
         proof_id=proof.json['proofId']
         self.assertEqual(self.post(self.crew,'/shifts/in',{},'crew').status_code,409)
         self.assertEqual(self.post(self.crew,'/shifts/out',{},'crew').status_code,200)
@@ -219,7 +230,7 @@ class PortalTests(unittest.TestCase):
         self.assertEqual(self.get(self.customer)['orders'][0]['status'],'Preparing')
 
     def test_rejection_and_ownership(self):
-        order,_=self.order('Maya');reference=secrets.token_hex(8);response=self.proof(order,reference=reference);self.assertEqual(response.status_code,201)
+        order,_=self.order('Maya');reference=str(secrets.randbelow(10**13)).zfill(13);response=self.proof(order,reference=reference);self.assertEqual(response.status_code,201)
         proof_id=response.json['proofId']
         response=self.post(self.crew,'/payments/proofs/'+proof_id+'/review',dict(decision='reject',note='Reference not found in receiving wallet'),'crew')
         self.assertEqual(response.status_code,200)

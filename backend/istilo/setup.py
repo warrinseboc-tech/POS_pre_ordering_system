@@ -47,6 +47,40 @@ def initialize(app, seed=True):
 
 
 def register_commands(app):
+    @app.cli.command('upgrade-password-otp')
+    def upgrade_password_otp():
+        """Add customer password OTP storage without altering existing accounts."""
+        source = (Path(__file__).parents[1] / 'database' / 'password_otp.sql').read_text(encoding='utf-8')
+        with transaction():
+            for statement in source.split(';'):
+                if statement.strip():
+                    execute(statement)
+        click.echo('Password OTP schema ready; existing accounts preserved.')
+
+    @app.cli.command('upgrade-email-otp')
+    def upgrade_email_otp():
+        """Apply the additive registration OTP migration to the configured database."""
+        connection = connect()
+        cursor = connection.cursor()
+        try:
+            source = (Path(__file__).parents[1] / 'database' / 'email_otp.sql').read_text(encoding='utf-8')
+            delimiter, pending = ';', []
+            for line in source.splitlines():
+                if line.strip().upper().startswith('DELIMITER '):
+                    delimiter = line.strip().split(None, 1)[1]
+                    continue
+                pending.append(line)
+                if line.rstrip().endswith(delimiter):
+                    cursor.execute('\n'.join(pending).rstrip()[:-len(delimiter)])
+                    while cursor.nextset():
+                        pass
+                    pending = []
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
+        click.echo('Email OTP schema upgraded; existing accounts preserved.')
+
     @app.cli.command('init-db')
     def init_db():
         """Create missing tables and menu items without deleting existing records."""

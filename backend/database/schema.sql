@@ -16,6 +16,14 @@ CREATE TABLE IF NOT EXISTS accounts (
  email_verified BOOLEAN NOT NULL DEFAULT FALSE,
  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+CREATE TABLE IF NOT EXISTS pending_account_verifications (
+ user_email VARCHAR(255) NOT NULL PRIMARY KEY, phone VARCHAR(20) NOT NULL UNIQUE,
+ password_hash VARCHAR(255) NOT NULL, otp_hash CHAR(64) NOT NULL,
+ expires_at DATETIME NOT NULL, attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+ last_sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+ registration_token_hash CHAR(64) NOT NULL DEFAULT ''
+) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS products (
  id VARCHAR(64) PRIMARY KEY, name VARCHAR(100) NOT NULL,
  category ENUM('Coffee','Milk Tea','Frappe','Latte','Matcha','Snacks') NOT NULL,
@@ -101,4 +109,17 @@ CREATE TABLE IF NOT EXISTS shifts (
 ) ENGINE=InnoDB;
 CREATE TABLE IF NOT EXISTS login_attempts (
  bucket CHAR(64) PRIMARY KEY, attempts INT UNSIGNED NOT NULL, expires_at DATETIME NOT NULL
+) ENGINE=InnoDB;
+
+-- Additive and rerunnable. Select the existing portal database before executing.
+-- Email keys avoid assumptions about legacy accounts.user_id types.
+CREATE TABLE IF NOT EXISTS password_change_verifications (
+ user_email VARCHAR(255) NOT NULL PRIMARY KEY,
+ token_hash CHAR(64) NOT NULL,
+ password_hash VARCHAR(255) NOT NULL,
+ otp_hash CHAR(64) NOT NULL,
+ expires_at DATETIME(6) NOT NULL,
+ attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+ last_sent_at DATETIME(6) NOT NULL,
+ created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
 ) ENGINE=InnoDB;

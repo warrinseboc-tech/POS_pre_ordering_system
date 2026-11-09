@@ -40,6 +40,7 @@
       <button class="textbutton full" id="showForgotPassword" type="button">Forgot password?</button>
       <button class="textbutton full" id="showCustomerRegister" type="button">Create a customer account</button>
       <p id="customerLoginError" class="error" role="alert"></p>
+      <p id="customerLoginSuccess" role="status"></p>
     </form>
     <form class="dialog-body" id="customerRegisterForm" action="/api/auth/customer/register" method="post" hidden>
       <div class="row between"><span class="eyebrow">New customer</span><button type="button" class="iconbutton" id="closeCustomerRegister" aria-label="Close registration">×</button></div>
@@ -53,6 +54,17 @@
       <button class="primary full" id="customerRegisterSubmit">Create account</button>
       <button class="textbutton full" id="showCustomerLogin" type="button">Already have an account? Log in</button>
       <p id="customerRegisterError" class="error" role="alert"></p>
+    </form>
+    <form class="dialog-body" id="customerOTPForm" hidden>
+      <div class="row between"><span class="eyebrow">Email verification</span><button type="button" class="iconbutton" id="closeCustomerOTP" aria-label="Close verification">×</button></div>
+      <h2 id="customerOTPTitle">Verify Your Email</h2>
+      <p id="customerOTPDescription">Enter the 6-digit verification code sent to your email.</p>
+      <label class="field">Verification code<input id="customerOTPCode" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" minlength="6" maxlength="6" required placeholder="000000"></label>
+      <button class="primary full" id="customerOTPSubmit">Verify Email</button>
+      <button class="textbutton full" type="button" id="customerOTPResend">Resend OTP</button>
+      <p id="customerOTPStatus" role="status" aria-live="polite"></p>
+      <p id="customerOTPError" class="error" role="alert"></p>
+      <button class="textbutton full" type="button" id="customerOTPBack">Back to Registration</button>
     </form>
     <form class="dialog-body" id="customerForgotForm" hidden>
       <div class="row between"><span class="eyebrow">Account recovery</span><button type="button" class="iconbutton" id="closeCustomerForgot" aria-label="Close password reset">×</button></div>

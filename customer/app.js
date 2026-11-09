@@ -2,11 +2,94 @@
   await Istilo.ready;
   'use strict';
   const S = Istilo, U = IstiloUI, e = S.escape, root = document.getElementById('content');
+  const statusLabel = status => ({ Pending: 'Waiting for approval', Preparing: 'Preparing order', Ready: 'Ready for Pickup' }[status] || status);
+  const statusBadge = status => `<span class="pill ${e(status.toLowerCase())}">${e(statusLabel(status))}</span>`;
   let category = null, search = '', cart = [], receipt = null;
   const checkoutDraft = { customer: '', phone: '', notes: '', payment: 'GCash', reviewed: false, termsAccepted: false };
   const pick = U.picker(cart, render);
   const loginDialog = document.getElementById('customerLoginDialog');
   const notificationsDialog = document.getElementById('customerNotificationsDialog');
+  let otpPending = false, resendDeadline = 0, resendBusy = false;
+  let otpMode = 'registration';
+  const otpForm = document.getElementById('customerOTPForm');
+  const otpResend = document.getElementById('customerOTPResend');
+  function updateResendCountdown() {
+    const seconds = Math.max(0, Math.ceil((resendDeadline - Date.now()) / 1000));
+    otpResend.disabled = resendBusy || seconds > 0;
+    otpResend.textContent = resendBusy ? 'Sending…' : seconds ? `Resend OTP in ${seconds}s` : 'Resend OTP';
+  }
+  setInterval(updateResendCountdown, 1000);
+  function showOTP(seconds) {
+    const passwordChange = otpMode === 'password';
+    document.getElementById('customerOTPTitle').textContent = passwordChange ? 'Verify Password Change' : 'Verify Your Email';
+    document.getElementById('customerOTPDescription').textContent = passwordChange
+      ? 'Enter the 6-digit code sent to your registered email to confirm your new password.'
+      : 'Enter the 6-digit verification code sent to your email.';
+    document.getElementById('customerOTPSubmit').textContent = passwordChange ? 'Verify & Change Password' : 'Verify Email';
+    document.getElementById('customerOTPBack').textContent = passwordChange ? 'Back to Password Reset' : 'Back to Registration';
+    document.getElementById('customerLoginForm').hidden = true;
+    document.getElementById('customerRegisterForm').hidden = true;
+    document.getElementById('customerForgotForm').hidden = true;
+    otpForm.hidden = false;
+    loginDialog.setAttribute('aria-labelledby', 'customerOTPTitle');
+    if (seconds !== undefined) resendDeadline = Date.now() + seconds * 1000;
+    updateResendCountdown();
+    document.getElementById('customerOTPCode').focus();
+  }
+  document.getElementById('closeCustomerOTP').onclick = () => loginDialog.close();
+  document.getElementById('customerOTPBack').onclick = () => {
+    otpForm.hidden = true;
+    if (otpMode === 'password') {
+      document.getElementById('customerForgotForm').hidden = false;
+      document.getElementById('customerResetIdentifier').focus();
+      return;
+    }
+    document.getElementById('customerRegisterForm').hidden = false;
+    document.getElementById('customerRegisterEmail').focus();
+  };
+  otpForm.onsubmit = async event => {
+    event.preventDefault();
+    const button = document.getElementById('customerOTPSubmit');
+    const error = document.getElementById('customerOTPError');
+    error.textContent = '';
+    button.disabled = true;
+    button.textContent = 'Verifying…';
+    const passwordChange = otpMode === 'password';
+    try {
+      const code = document.getElementById('customerOTPCode').value;
+      if (passwordChange) await S.customerVerifyPassword(code);
+      else { await S.customerVerifyEmail(code); otpPending = false; }
+      otpForm.reset();
+      showCustomerLogin();
+      const message = passwordChange ? 'Password changed successfully. Please log in.' : 'Email verified successfully!';
+      document.getElementById('customerLoginSuccess').textContent = message;
+      document.getElementById('customerIdentifier').focus();
+      U.toast(message);
+      updateLoginButton();
+      render();
+    } catch (err) { error.textContent = err.message; }
+    finally { button.disabled = false; button.textContent = passwordChange ? 'Verify & Change Password' : 'Verify Email'; }
+  };
+  otpResend.onclick = async () => {
+    resendBusy = true;
+    updateResendCountdown();
+    document.getElementById('customerOTPError').textContent = '';
+    try {
+      const result = await (otpMode === 'password' ? S.customerResendPasswordOTP() : S.customerResendOTP());
+      resendDeadline = Date.now() + result.resendAfter * 1000;
+      document.getElementById('customerOTPStatus').textContent = 'A new verification code has been sent.';
+      document.getElementById('customerOTPCode').value = '';
+    } catch (err) {
+      if (err.resendAfter) resendDeadline = Date.now() + err.resendAfter * 1000;
+      document.getElementById('customerOTPError').textContent = err.message;
+    }
+    finally { resendBusy = false; updateResendCountdown(); }
+  };
+  try {
+    const registration = await S.customerRegistrationStatus();
+    otpPending = registration.pending;
+    if (otpPending) resendDeadline = Date.now() + registration.resendAfter * 1000;
+  } catch { /* Keep login available if registration status cannot be fetched. */ }
   function requireCustomer() {
     if (S.customer?.verified) return true;
     showCustomerLogin();
@@ -15,6 +98,8 @@
     return false;
   }
   function showCustomerLogin() {
+    otpForm.hidden = true;
+    loginDialog.setAttribute('aria-labelledby', 'customerLoginTitle');
     document.getElementById('customerLoginForm').hidden = false;
     document.getElementById('customerRegisterForm').hidden = true;
     document.getElementById('customerForgotForm').hidden = true;
@@ -35,11 +120,11 @@
       if (order.status === 'Cancelled') return { key, type: 'rejected', title: 'Order cancelled', message: 'Your pickup order was cancelled by the shop.', time: order.updatedAt || order.time };
       if (S.isPaid(order)) {
         const statusMessages = { Pending: 'Payment verified. Your order is pending crew acceptance.', Preparing: 'Your payment is verified and the crew is preparing your order.', Ready: 'Your order is ready for pickup.', Completed: 'Your order has been completed and collected.' };
-        return { key, type: 'process', title: `Order ${order.status}`, message: statusMessages[order.status] || 'Your pickup order is being processed.', time: order.updatedAt || order.time };
+        return { key, type: 'process', title: statusLabel(order.status), message: statusMessages[order.status] || 'Your pickup order is being processed.', time: order.updatedAt || order.time };
       }
       if (proofStatus === 'Under review' || order.paymentStatus === 'Under review') return { key, type: 'process', title: 'Payment proof under review', message: 'The crew is checking your payment receipt.', time: order.updatedAt || order.time };
       if (order.status === 'Pending') return { key, type: 'process', title: 'Order submitted', message: 'Your pickup order is waiting for payment verification.', time: order.updatedAt || order.time };
-      return { key, type: 'process', title: `Order ${order.status}`, message: 'Your pickup order status was updated.', time: order.updatedAt || order.time };
+      return { key, type: 'process', title: statusLabel(order.status), message: 'Your pickup order status was updated.', time: order.updatedAt || order.time };
     });
   }
   function seenNotificationKeys() {
@@ -76,12 +161,12 @@
     const ownOrders=S.read('orders',[]);
     const order=ownOrders.find(o=>o.id===receipt?.id)||ownOrders.at(-1);
     if(!order)return '<section class="checkout-layout"><h1>No order to show.</h1><button class="primary" data-navigate="menu">Back to menu</button></section>';
-    return `<section class="checkout-layout"><span class="eyebrow">Order ${U.shortId(order.id)}</span><h1>${S.isPaid(order)?'Your payment is verified.':'Your pickup order'}</h1><p class="page-intro">${e(order.customer)} · ${S.date(order.time)} · ${U.badge(order.status)}</p><div class="grid two">${IstiloPayments.panel(order)}<div class="card"><h3>Order summary</h3>${U.cartHTML(order.items,false)}<div class="summary-total"><span>Total</span><strong>${S.money(order.total)}</strong></div><p>Pickup: ${e(S.business.address)}</p><p class="mini-note">The crew manually accepts orders after successful payment verification.</p></div></div><button class="outline" data-navigate="menu" style="margin-top:22px">Back to menu</button></section>`;
+    return `<section class="checkout-layout"><span class="eyebrow">Order ${U.shortId(order.id)}</span><h1>${S.isPaid(order)?'Your payment is verified.':'Your pickup order'}</h1><p class="page-intro">${e(order.customer)} · ${S.date(order.time)} · ${statusBadge(order.status)}</p><div class="grid two">${IstiloPayments.panel(order)}<div class="card"><h3>Order summary</h3>${U.cartHTML(order.items,false)}<div class="summary-total"><span>Total</span><strong>${S.money(order.total)}</strong></div><p>Pickup: ${e(S.business.address)}</p><p class="mini-note">The crew manually accepts orders after successful payment verification.</p></div></div><button class="outline" data-navigate="menu" style="margin-top:22px">Back to menu</button></section>`;
   }
   function tracking() {
     const ownOrders=S.read('orders',[]).filter(o=>o.source==='Customer').slice().reverse();
     if(!ownOrders.length)return '<section class="checkout-layout"><span class="eyebrow">Order tracking</span><h1>No orders to track.</h1><p class="page-intro">Your connected database orders will appear here.</p><button class="primary" data-navigate="menu">Order from the menu</button></section>';
-    return `<section class="checkout-layout"><span class="eyebrow">Live order tracking</span><h1>Track your order</h1><p class="page-intro">Status updates are synchronized with the database and crew portal.</p><div class="tracking-list">${ownOrders.map(order=>`<article class="card tracking-card"><div class="row between wrap"><div><small>Order ${U.shortId(order.id)}</small><h3>${e(order.customer)}</h3></div>${U.badge(order.status)}</div><p>${order.items.map(i=>`${i.qty} × ${e(i.name)}`).join(', ')}</p><div class="tracking-progress" role="list" aria-label="Order progress">${['Pending','Preparing','Ready','Completed'].map((status,index)=>{const step=['Pending','Preparing','Ready','Completed'].indexOf(order.status);return `<span class="${index<=step?'active':''} ${status==='Cancelled'?'': ''}" role="listitem">${status}</span>`}).join('')} </div><div class="row between wrap"><strong>${S.money(order.total)}</strong><small>${order.paymentStatus} · ${e(order.payment)}</small></div>${order.status==='Cancelled'?'<p class="error">This order was cancelled.</p>':''}</article>`).join('')}</div></section>`;
+    return `<section class="checkout-layout"><span class="eyebrow">Live order tracking</span><h1>Track your order</h1><p class="page-intro">Status updates are synchronized with the database and crew portal.</p><div class="tracking-list">${ownOrders.map(order=>`<article class="card tracking-card"><div class="row between wrap"><div><small>Order ${U.shortId(order.id)}</small><h3>${e(order.customer)}</h3></div>${statusBadge(order.status)}</div><p>${order.items.map(i=>`${i.qty} × ${e(i.name)}`).join(', ')}</p><div class="tracking-progress" role="list" aria-label="Order progress">${['Pending','Preparing','Ready','Completed'].map((status,index)=>{const step=['Pending','Preparing','Ready','Completed'].indexOf(order.status);return `<span class="${index<=step?'active':''} ${status==='Cancelled'?'': ''}" role="listitem">${e(statusLabel(status))}</span>`}).join('')} </div><div class="row between wrap"><strong>${S.money(order.total)}</strong><small>${order.paymentStatus} · ${e(order.payment)}</small></div>${order.status==='Cancelled'?'<p class="error">This order was cancelled.</p>':''}</article>`).join('')}</div></section>`;
   }
   function profile() {
     if (!S.customer?.verified) {
@@ -243,6 +328,7 @@
     };
     const profilePassword = document.getElementById('customerProfilePassword');
     if (profilePassword) profilePassword.onclick = () => {
+      otpForm.hidden = true;
       showCustomerLogin();
       document.getElementById('customerLoginForm').hidden = true;
       document.getElementById('customerRegisterForm').hidden = true;
@@ -261,6 +347,8 @@
   document.getElementById('closeCustomerRegister').onclick = () => loginDialog.close();
   document.getElementById('closeCustomerForgot').onclick = () => loginDialog.close();
   document.getElementById('showCustomerRegister').onclick = () => {
+    otpMode = 'registration';
+    if (otpPending) { showOTP(); return; }
     document.getElementById('customerLoginForm').hidden = true;
     document.getElementById('customerRegisterForm').hidden = false;
     document.getElementById('customerRegisterEmail').focus();
@@ -272,6 +360,7 @@
     document.getElementById('customerIdentifier').focus();
   };
   document.getElementById('showForgotPassword').onclick = () => {
+    otpForm.hidden = true;
     document.getElementById('customerLoginForm').hidden = true;
     document.getElementById('customerRegisterForm').hidden = true;
     document.getElementById('customerForgotForm').hidden = false;
@@ -311,21 +400,25 @@
     const form = event.currentTarget;
     const values = new FormData(form);
     document.getElementById('customerRegisterError').textContent = '';
+    const button = document.getElementById('customerRegisterSubmit');
+    button.disabled = true;
+    button.textContent = 'Sending verification code…';
     try {
-      await S.customerRegister(values.get('name').trim(), values.get('email').trim(), values.get('phone').trim(), values.get('password'), values.get('terms') === 'on');
-      await S.refresh(true);
-      updateLoginButton();
-      loginDialog.close();
+      const result = await S.customerRegister(values.get('name').trim(), values.get('email').trim(), values.get('phone').trim(), values.get('password'), values.get('terms') === 'on');
+      otpPending = true;
       form.reset();
-      U.toast('Account created. You can now place an order.');
-      render();
+      document.getElementById('customerOTPError').textContent = '';
+      document.getElementById('customerOTPStatus').textContent = 'Check your inbox or spam folder.';
+      showOTP(result.resendAfter);
     } catch (err) {
       document.getElementById('customerRegisterError').textContent = err.message;
-    }
+    } finally { button.disabled = false; button.textContent = 'Create account'; }
   };
   document.getElementById('customerForgotForm').onsubmit = async event => {
     event.preventDefault();
     const form = event.currentTarget;
+    const button = document.getElementById('customerForgotSubmit');
+    if (button.disabled) return;
     const values = new FormData(form);
     const error = document.getElementById('customerForgotError');
     error.textContent = '';
@@ -333,16 +426,24 @@
       error.textContent = 'Passwords do not match.';
       return;
     }
+    button.disabled = true;
     try {
+      if (!await U.confirm('Are you sure you want to change your password?', 'Change password?', 'Yes, change password')) return;
+      button.textContent = 'Sending verification code…';
       const identifier = values.get('identifier').trim();
-      await S.customerResetPassword(identifier, values.get('password'));
+      const result = await S.customerResetPassword(identifier, values.get('password'));
       form.reset();
-      showCustomerLogin();
       document.getElementById('customerIdentifier').value = identifier;
-      document.getElementById('customerIdentifier').focus();
-      U.toast('Password changed successfully. Please log in.');
+      otpMode = 'password';
+      document.getElementById('customerOTPError').textContent = '';
+      document.getElementById('customerOTPStatus').textContent = 'Your password will change only after verification. Check your inbox or spam folder.';
+      document.getElementById('customerOTPCode').value = '';
+      showOTP(result.resendAfter);
     } catch (err) {
       error.textContent = err.message;
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Change password';
     }
   };
   document.getElementById('notificationButton').onclick = () => {

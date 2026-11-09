@@ -14,7 +14,12 @@
     catch { throw new Error('Cannot reach the Python server. Check your connection and try again.'); }
     let data;
     try { data=await response.json(); } catch { throw new Error('Open the portal using the Python server at http://127.0.0.1:5050, not Live Server.'); }
-    if (!response.ok) { const error=new Error(data.error||'Request failed.'); error.status=response.status; throw error; }
+    if (!response.ok) {
+      const message = [404,405].includes(response.status) && /^\/auth\/customer\/(register|verify-email|resend-otp|registration-status)$/.test(path)
+        ? 'Email verification is unavailable on this server. Restart backend/app.py, then refresh this page.'
+        : data.error||'Request failed.';
+      const error=new Error(message); error.status=response.status; error.resendAfter=data.resendAfter; throw error;
+    }
     return data;
   }
   async function refresh(emit=false) {
@@ -103,8 +108,13 @@
     recordPayment:async(id,paid)=>(await mutate('/orders/'+id+'/cash','POST',{paid})).order,
     login:async(employee,password,role=portal)=>{await mutate('/auth/login','POST',{employee,password,role});return store.user;},
     customerLogin:async(identifier,password)=>(await mutate('/auth/customer/login','POST',{identifier,password})).user,
-    customerRegister:async(name,email,phone,password,terms=false)=>(await mutate('/auth/customer/register','POST',{name,email,phone,password,terms})).user,
-    customerResetPassword:async(identifier,password)=>(await mutate('/auth/customer/reset-password','POST',{identifier,password})).ok,
+    customerRegister:(name,email,phone,password,terms=false)=>mutate('/auth/customer/register','POST',{name,email,phone,password,terms}),
+    customerVerifyEmail:code=>mutate('/auth/customer/verify-email','POST',{code}),
+    customerResendOTP:()=>mutate('/auth/customer/resend-otp'),
+    customerRegistrationStatus:()=>api('/auth/customer/registration-status'),
+    customerResetPassword:(identifier,password)=>mutate('/auth/customer/reset-password','POST',{identifier,password}),
+    customerVerifyPassword:code=>mutate('/auth/customer/reset-password/verify','POST',{code}),
+    customerResendPasswordOTP:()=>mutate('/auth/customer/reset-password/resend'),
     updateCustomerProfile:async(data)=>(await mutate('/auth/customer/profile','PATCH',data)).user,
     logout:()=>mutate('/auth/logout'),
     uploadProof:(id,body)=>mutate('/orders/'+id+'/proof','POST',body),
